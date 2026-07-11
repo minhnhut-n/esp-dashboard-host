@@ -1,5 +1,11 @@
 /* ==================== ESP Dashboard Host - CodiePie Style ==================== */
-@import url('https://fonts.googleapis.com/css?family=Raleway:300,400,500,600,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
 :root {
     --primary: #4361ee;
@@ -44,7 +50,8 @@ body.dark-mode .main-footer { border-color: #2d3748; }
 
 body.dark-mode .card {
     background-color: #1a1f2e;
-    border: 1px solid #2d3748;
+    border: 2px solid #2d3748;
+    margin-bottom: 20px;
 }
 
 body.dark-mode .card .card-stats .card-stats-title { background-color: transparent; }
@@ -113,45 +120,79 @@ body.dark-mode .card-footer { border-top-color: rgba(255,255,255,0.05); }
 body.dark-mode .table td, body.dark-mode .table th { border-top-color: rgba(255,255,255,0.05); }
 
 body.dark-mode .navbar-bg { background: #1a1f2e; }
+body.dark-mode .navbar { background-color: #1a1f2e; }
+body.dark-mode .navbar .nav-link { color: #a0aec0; }
+body.dark-mode .navbar .nav-link:hover { color: #fff; }
+body.dark-mode .navbar-bg { 
+    background: linear-gradient(180deg, #1a1f2e 0%, #151a29 100%) !important; 
+}
 
 /* ==================== Layout 4 Overrides (Sidebar Under Header) ==================== */
 body.layout-4 .navbar-bg {
     background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
-    height: 70px;
+    height: 60px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 879;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
 }
 
 body.layout-4 .navbar { 
     left: 0; 
     right: 0;
-    position: relative;
+    position: fixed;
+    top: 0;
+    z-index: 880;
+    background: transparent;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
 }
+
 body.layout-4 .navbar .nav-link { color: var(--primary); }
 
 /* Sidebar under header - vertical, fixed position, doesn't push content */
 body.layout-4 .main-sidebar {
     position: fixed;
-    top: 70px;
+    top: 60px;
     left: 0;
-    width: 250px;
-    height: calc(100vh - 70px);
+    width: var(--sidebar-width);
+    height: calc(100vh - 60px);
     z-index: 880;
     background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);
     border-right: 1px solid #e2e8f0;
 }
 
-body.layout-4 .main-content,
-body.layout-4 .main-footer { padding-left: 280px; }
+body.layout-4 .main-content {
+    padding-left: calc(var(--sidebar-width) + 30px);
+    padding-top: 80px;
+}
+
+body.layout-4 .main-footer { 
+    padding-left: calc(var(--sidebar-width) + 30px); 
+    padding-top: 20px;
+}
 
 body.layout-4 .section .section-header {
-    margin: 0 0 30px 0 !important;
+    margin: 0 0 20px 0 !important;
+    padding: 15px 20px;
     border-color: #e2e8f0;
     background-color: #fff;
 }
 
+body.layout-4 .section {
+    margin-top: 0;
+    padding-top: 0;
+}
+
 body.layout-4 .card { 
     background-color: #fff; 
-    border-color: #e2e8f0;
+    border: 2px solid #e2e8f0;
     box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
 }
 
 body.layout-4 .main-sidebar .sidebar-menu li a { color: #2d3748; }
@@ -163,20 +204,29 @@ body.layout-4 .main-sidebar .sidebar-menu li.active > a {
 }
 body.layout-4 .main-sidebar .sidebar-menu li.menu-header { color: #718096; }
 
-/* Sidebar dropdown menus - position absolute to not push content */
+/* Sidebar dropdown menus - position below parent item */
 body.layout-4 .main-sidebar .sidebar-menu li.dropdown > ul.dropdown-menu {
-    position: absolute;
-    left: 100%;
-    top: 0;
+    position: static;
+    left: auto;
+    top: auto;
     margin: 0;
-    padding: 5px 0;
-    min-width: 180px;
+    padding: 0;
+    min-width: 100%;
     z-index: 900;
     display: none;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 body.layout-4 .main-sidebar .sidebar-menu li.dropdown.active > ul.dropdown-menu {
     display: block !important;
+}
+
+body.layout-4 .main-sidebar .sidebar-menu li.dropdown.active > ul.dropdown-menu li a {
+    padding-left: 35px;
+    font-size: 14px;
+    color: #a0aec0;
 }
 
 /* ==================== Sidebar Style 3 (Dark) ==================== */
@@ -563,8 +613,8 @@ a:hover { color: var(--primary-dark); }
     border-radius: 3px;
     border: 1px solid #dae1f4;
     position: relative;
-    margin-bottom: 30px;
-    padding: 20px;
+    margin-bottom: 20px;
+    padding: 15px 20px;
     display: flex;
     align-items: center;
 }
@@ -585,7 +635,7 @@ a:hover { color: var(--primary-dark); }
 }
 
 .main-footer {
-    padding: 20px 30px 20px 280px;
+    padding: 20px 30px 20px calc(var(--sidebar-width) + 30px);
     margin-top: 40px;
     color: #98a6ad;
     border-top: 1px solid #DCE1E5;
