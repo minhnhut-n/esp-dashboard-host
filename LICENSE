@@ -1,18 +1,44 @@
 Copyright (c) 2026 Nhut Nguyen Minh (minhnhut.n)
+Contact: nhut.nguyenminh318@gmail.com | GitHub: https://github.com/minhnhut.n
 
-NON-COMMERCIAL LICENSE AGREEMENT
+===============================================================================
+NON-COMMERCIAL & ATTRIBUTION LICENSE AGREEMENT
+===============================================================================
 
-1. Permission is hereby granted, free of charge, to any person obtaining a copy
-   of this documentation and associated software/files (the "Material"), to use,
-   copy, modify, and merge the Material for personal, educational, and strictly 
-   NON-COMMERCIAL purposes.
+1. GRANT OF LICENSE & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining a copy of 
+this documentation and associated code/files (the "Material"), to use, copy, 
+modify, and merge the Material strictly for personal, educational, and non-commercial 
+purposes, subject to the following conditions:
 
-2. COMMERCIAL USE PROHIBITED:
-   Any commercial use, sale, sublicensing, distribution for profit, or inclusion 
-   in commercial products/courses of this Material is STRICTLY PROHIBITED without 
-   prior explicit written approval from the copyright owner.
+  (a) ATTRIBUTION: The above copyright notice, this permission notice, and 
+      author contact information MUST be included in all copies or substantial 
+      portions of the Material or derivative works.
 
-3. For commercial licensing inquiries or permission requests, please contact:
-   - Author: Nhut Nguyen Minh
-   - GitHub: https://github.com/minhnhut.n
-   - Email: nhut.nguyenminh318@gmail.com
+2. COMMERCIAL USE PROHIBITION & DEFINITION
+  (a) Any Commercial Use of the Material, in whole or in part, or any derivative 
+      work based upon it, is STRICTLY PROHIBITED without prior explicit written 
+      permission from the Copyright Holder.
+  
+  (b) "Commercial Use" includes, but is not limited to:
+      - Selling, renting, or licensing the Material or derivative works.
+      - Using the Material for commercial training, paid workshops, or internal 
+        employee training within a for-profit entity.
+      - Monetizing content derived from the Material (e.g., via ad-supported 
+        platforms, paid blogs, or paywalled documentation).
+      - Including the Material in any commercial product, service, or software.
+
+3. DERIVATIVE WORKS
+Any modification, translation, or adaptation of the Material remains subject 
+to the terms of this License. Creating derivative works does NOT grant you the 
+right to commercially exploit the modified Material.
+
+4. DISCLAIMER OF WARRANTY & LIMITATION OF LIABILITY
+THE MATERIAL IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+
+IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, 
+DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE MATERIAL OR THE USE OR OTHER 
+DEALINGS IN THE MATERIAL.
