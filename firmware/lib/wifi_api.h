@@ -18,8 +18,8 @@ extern const char* g_wifi_tag;
 #define ESP_INTERNAL_STAM 1
 
 esp_err_t wifi_init_general(void);
-int wifi_station_mode(int* param);
-int wifi_ap_mode(int* param);
+esp_err_t wifi_station_mode(int* param);
+esp_err_t wifi_ap_mode(int* param);
 int wifi_event_handler(int (*func)(int, int));
 
 #endif
