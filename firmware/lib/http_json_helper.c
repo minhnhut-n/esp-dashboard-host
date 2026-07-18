@@ -15,13 +15,26 @@
  * - return root as string to web (json format) + free root
  */
 
+static esp_err_t set_cors_headers(httpd_req_t *req) {
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
+    return ESP_OK;
+}
+
 // json main logic send json format as string
 esp_err_t json_response_https(httpd_req_t *req, cJSON *root) {
     char *res = cJSON_Print(root);
+    set_cors_headers(req);
     httpd_resp_set_type(req, DATA_TYPE_JSON);
     httpd_resp_sendstr(req, res);
     free(res);
     return ESP_OK;
+}
+
+esp_err_t json_options_handler(httpd_req_t *req) {
+    set_cors_headers(req);
+    return httpd_resp_sendstr(req, "");
 }
 
 // End point, GET: /api/ping
@@ -39,7 +52,9 @@ esp_err_t json_get_ping(httpd_req_t* req) {
 esp_err_t json_get_data(httpd_req_t *req) {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "sensor", 25);
-    return json_response_https(req, root);
+    esp_err_t ret = json_response_https(req, root);
+    cJSON_Delete(root);
+    return ret;
 }
 
 // End point, POST: /api/relay
@@ -80,9 +95,13 @@ esp_err_t start_http_server(void) {
         //registry URI handler, in runtime (possible)
         httpd_uri_t uri_s[] = {
             {.uri = API_DATA, .method = HTTP_GET, .handler = json_get_data},
+            {.uri = API_DATA, .method = HTTP_OPTIONS, .handler = json_options_handler},
             {.uri = API_PING, .method = HTTP_GET, .handler = json_get_ping},
+            {.uri = API_PING, .method = HTTP_OPTIONS, .handler = json_options_handler},
             {.uri = API_REBOOT, .method = HTTP_POST, .handler = json_post_reboot},
+            {.uri = API_REBOOT, .method = HTTP_OPTIONS, .handler = json_options_handler},
             {.uri = API_RELAY, .method = HTTP_POST, .handler = json_post_relay},
+            {.uri = API_RELAY, .method = HTTP_OPTIONS, .handler = json_options_handler},
         };
         //registry one by one
         for (int i=0; i< sizeof(uri_s)/sizeof(uri_s[0]); i++) {
