@@ -89,11 +89,13 @@ esp_err_t start_http_server(void) {
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.lru_purge_enable = true;
-    config.max_uri_handlers = 10;
+    config.max_uri_handlers = 16;
     
     if (httpd_start(&server, &config) == ESP_OK) {
         //registry URI handler, in runtime (possible)
         httpd_uri_t uri_s[] = {
+            {.uri = ROOT_URI, .method = HTTP_GET, .handler = dashboard_get_handler},
+            {.uri = FAVICON_URI, .method = HTTP_GET, .handler = favicon_get_handler},
             {.uri = API_DATA, .method = HTTP_GET, .handler = json_get_data},
             {.uri = API_DATA, .method = HTTP_OPTIONS, .handler = json_options_handler},
             {.uri = API_PING, .method = HTTP_GET, .handler = json_get_ping},

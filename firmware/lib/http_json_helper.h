@@ -1,16 +1,16 @@
 #ifndef _MY_JSON_HELPER_
 #define _MY_JSON_HELPER_
 
+#include <cJSON.h>
+#include <esp_http_server.h>
+#include <esp_timer.h>
+
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "nvs_flash.h"
 #include "esp_log.h"
 #include "esp_netif.h"
-
-#include <cJSON.h>
-#include <esp_http_server.h>
-#include <esp_timer.h>
-
+#include "dashboard_page.h"
 
 #define DATA_TYPE_JSON "application/json"
 #define DATA_TYPE_TEXT "text/plain"
@@ -32,6 +32,8 @@
 #define API_RELAY "/api/relay"
 #define API_REBOOT "/api/reboot"
 #define API_PING "/api/ping"
+#define ROOT_URI "/"
+#define FAVICON_URI "/favicon.ico"
 
 //API HANDLE
 esp_err_t json_response_https(httpd_req_t *req, cJSON *root);

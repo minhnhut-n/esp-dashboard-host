@@ -1,5 +1,8 @@
 #include "wifi_api.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 int g_wifi_mode;
 const char* g_wifi_tag = "ESP_WIFI_C";
 
@@ -20,9 +23,15 @@ static void esp_wifi_event_handler(void* arg, esp_event_base_t e_base, int32_t e
             case WIFI_EVENT_STA_CONNECTED: // Wi-Fi event declarations enum
                 ESP_LOGI(g_wifi_tag, "wifi as station CONNECTED!");
                 break;
-            case WIFI_EVENT_STA_DISCONNECTED: // Wi-Fi event declarations enum
-                ESP_LOGI(g_wifi_tag, "wifi as station DISCONNECTED!");
+            case WIFI_EVENT_STA_DISCONNECTED: {
+                wifi_event_sta_disconnected_t *event = (wifi_event_sta_disconnected_t *)e_data;
+                ESP_LOGW(g_wifi_tag, "wifi as station DISCONNECTED! reason=%d", event->reason);
+                if (g_wifi_mode == WIFI_MODE_STA) {
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                    esp_wifi_connect();
+                }
                 break;
+            }
 
             case WIFI_EVENT_AP_START: // Wi-Fi event declarations enum
                 ESP_LOGI(g_wifi_tag, "wifi as AP START!");
@@ -127,7 +136,7 @@ esp_err_t wifi_station_mode(int* param) {
         .sta = {
             .ssid = TEMP_SSID,
             .password = TEMP_PASS,
-            .threshold.authmode = WIFI_AUTH_WPA2_PSK
+            .threshold.authmode = WIFI_AUTH_OPEN
         },
     };
 
@@ -137,6 +146,7 @@ esp_err_t wifi_station_mode(int* param) {
     ret = esp_wifi_start();
     ESP_LOGI(g_wifi_tag, "Switch mode to Wifi STA!");
 
+    vTaskDelay(pdMS_TO_TICKS(1000));
     ret = esp_wifi_connect();
     ESP_LOGI(g_wifi_tag, "Connecting to AP...");
     return ret;
