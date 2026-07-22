@@ -52,6 +52,7 @@ esp_err_t json_get_ping(httpd_req_t* req) {
 esp_err_t json_get_data(httpd_req_t *req) {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "sensor", 25);
+    cJSON_AddStringToObject(root, "state", "ok");
     esp_err_t ret = json_response_https(req, root);
     cJSON_Delete(root);
     return ret;
@@ -109,6 +110,6 @@ esp_err_t start_http_server(void) {
         for (int i=0; i< sizeof(uri_s)/sizeof(uri_s[0]); i++) {
             httpd_register_uri_handler(server, &uri_s[i]);
         }
-    };
+    }
     return ESP_OK;
 }
