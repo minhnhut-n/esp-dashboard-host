@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ESP-IDF Dashboard</title>
+  <!-- Blocks automatic default favicon browser request -->
+  <link rel="icon" href="data:,">
+  <style>
+    body { font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 24px; }
+    .card { max-width: 720px; margin: 0 auto; background: #111827; border: 1px solid #334155; border-radius: 16px; padding: 24px; }
+    h1 { margin: 0 0 8px; }
+    .muted { color: #94a3b8; }
+    button { margin: 6px 6px 0 0; padding: 10px 14px; border: none; border-radius: 10px; background: #38bdf8; color: white; cursor: pointer; }
+    button.secondary { background: #1f2937; }
+    button.success { background: #22c55e; }
+    button.danger { background: #ef4444; }
+    pre { background: #020617; padding: 14px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>ESP-IDF Dashboard</h1>
+    <p class="muted">Basic internal dashboard for the current firmware REST API.</p>
+    
+    <button onclick="call('/api/ping')">Ping</button>
+    <button onclick="call('/api/data')" class="secondary">Get Data</button>
+    <button onclick="call('/api/relay', 'POST', '{\x22relay\x22:1,\x22state\x22:true}')" class="success">Relay ON</button>
+    <button onclick="call('/api/relay', 'POST', '{\x22relay\x22:1,\x22state\x22:false}')" class="danger">Relay OFF</button>
+    <button onclick="call('/api/reboot', 'POST')" class="danger">Reboot</button>
+    
+    <pre id="out">Click a button to test the ESP REST API.</pre>
+  </div>
+
+  <!-- Browser dynamically requests this next -->
+  <script src="/script.js"></script>
+</body>
+</html>

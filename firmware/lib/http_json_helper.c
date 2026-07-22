@@ -52,6 +52,7 @@ esp_err_t json_get_ping(httpd_req_t* req) {
 esp_err_t json_get_data(httpd_req_t *req) {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "sensor", 25);
+    cJSON_AddStringToObject(root, "state", "ok");
     esp_err_t ret = json_response_https(req, root);
     cJSON_Delete(root);
     return ret;
@@ -89,11 +90,13 @@ esp_err_t start_http_server(void) {
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.lru_purge_enable = true;
-    config.max_uri_handlers = 10;
+    config.max_uri_handlers = 16;
     
     if (httpd_start(&server, &config) == ESP_OK) {
         //registry URI handler, in runtime (possible)
         httpd_uri_t uri_s[] = {
+            {.uri = ROOT_URI, .method = HTTP_GET, .handler = dashboard_get_handler},
+            {.uri = FAVICON_URI, .method = HTTP_GET, .handler = favicon_get_handler},
             {.uri = API_DATA, .method = HTTP_GET, .handler = json_get_data},
             {.uri = API_DATA, .method = HTTP_OPTIONS, .handler = json_options_handler},
             {.uri = API_PING, .method = HTTP_GET, .handler = json_get_ping},
@@ -107,6 +110,6 @@ esp_err_t start_http_server(void) {
         for (int i=0; i< sizeof(uri_s)/sizeof(uri_s[0]); i++) {
             httpd_register_uri_handler(server, &uri_s[i]);
         }
-    };
+    }
     return ESP_OK;
 }
