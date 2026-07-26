@@ -1,31 +1,37 @@
 #include "wifi_api.h"
+#include "event_bus.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_wifi.h"
+#include "esp_log.h"
 
 int g_wifi_mode;
 const char* g_wifi_tag = "ESP_WIFI_C";
 
-
 static void esp_wifi_event_handler(void* arg, esp_event_base_t e_base, int32_t e_id, void* e_data) {
     if (e_base == WIFI_EVENT) {
         switch (e_id) {
-            case WIFI_EVENT_SCAN_DONE: // Wi-Fi event declarations enum
+            case WIFI_EVENT_SCAN_DONE:
                 ESP_LOGI(g_wifi_tag, "wifi SCAN done!");
+                event_bus_post_wifi_scan_done();
                 break;
-
-            case WIFI_EVENT_STA_START: // Wi-Fi event declarations enum
+            case WIFI_EVENT_STA_START:
                 ESP_LOGI(g_wifi_tag, "wifi as station START!");
+                event_bus_post_wifi_sta_start();
                 break;
-            case WIFI_EVENT_STA_STOP: // Wi-Fi event declarations enum
+            case WIFI_EVENT_STA_STOP:
                 ESP_LOGI(g_wifi_tag, "wifi as station STOP!");
+                event_bus_post_wifi_sta_stop();
                 break;
-            case WIFI_EVENT_STA_CONNECTED: // Wi-Fi event declarations enum
+            case WIFI_EVENT_STA_CONNECTED:
                 ESP_LOGI(g_wifi_tag, "wifi as station CONNECTED!");
+                event_bus_post_wifi_connected();
                 break;
             case WIFI_EVENT_STA_DISCONNECTED: {
                 wifi_event_sta_disconnected_t *event = (wifi_event_sta_disconnected_t *)e_data;
                 ESP_LOGW(g_wifi_tag, "wifi as station DISCONNECTED! reason=%d", event->reason);
+                event_bus_post_wifi_disconnected();
                 if (g_wifi_mode == WIFI_MODE_STA) {
                     vTaskDelay(pdMS_TO_TICKS(1000));
                     esp_wifi_connect();
@@ -33,17 +39,21 @@ static void esp_wifi_event_handler(void* arg, esp_event_base_t e_base, int32_t e
                 break;
             }
 
-            case WIFI_EVENT_AP_START: // Wi-Fi event declarations enum
+            case WIFI_EVENT_AP_START:
                 ESP_LOGI(g_wifi_tag, "wifi as AP START!");
+                event_bus_post_wifi_ap_start();
                 break;
-            case WIFI_EVENT_AP_STOP: // Wi-Fi event declarations enum
+            case WIFI_EVENT_AP_STOP:
                 ESP_LOGI(g_wifi_tag, "wifi as AP STOP!");
+                event_bus_post_wifi_ap_stop();
                 break;
-            case WIFI_EVENT_AP_STACONNECTED: // Wi-Fi event declarations enum
+            case WIFI_EVENT_AP_STACONNECTED:
                 ESP_LOGI(g_wifi_tag, "wifi as AP CONNECTED!");
+                event_bus_post_wifi_ap_sta_connected();
                 break;
-            case WIFI_EVENT_AP_STADISCONNECTED: // Wi-Fi event declarations enum
+            case WIFI_EVENT_AP_STADISCONNECTED:
                 ESP_LOGI(g_wifi_tag, "wifi as AP DISCONNECTED!");
+                event_bus_post_wifi_ap_sta_disconnected();
                 break;
 
             default:
@@ -53,13 +63,15 @@ static void esp_wifi_event_handler(void* arg, esp_event_base_t e_base, int32_t e
     }
     if (e_base == IP_EVENT) {
         switch (e_id) {
-            case IP_EVENT_STA_GOT_IP: // IP event declarations enum
+            case IP_EVENT_STA_GOT_IP:
                 ESP_LOGI(g_wifi_tag, "wifi station got IP!");
+                event_bus_post_wifi_got_ip();
                 break;
-            case IP_EVENT_STA_LOST_IP: // IP event declarations enum
+            case IP_EVENT_STA_LOST_IP:
                 ESP_LOGI(g_wifi_tag, "wifi station lost IP!");
+                event_bus_post_wifi_lost_ip();
                 break;
-            case IP_EVENT_TX_RX: // IP event declarations enum
+            case IP_EVENT_TX_RX:
                 ESP_LOGI(g_wifi_tag, "wifi on TRANSMISSION!");
                 break;
             default:
@@ -123,9 +135,7 @@ esp_err_t wifi_init_general(void) {
     return ret;
 }
 
-#define TEMP_SSID "Thoai Hanh"
-#define TEMP_PASS "hanh12345"
-esp_err_t wifi_station_mode(int* param) {
+esp_err_t wifi_station_mode(wifi_creds_data_t* creds) {
     if (g_wifi_mode == WIFI_MODE_STA) return ESP_OK;
 
     esp_err_t ret;
@@ -134,11 +144,13 @@ esp_err_t wifi_station_mode(int* param) {
     g_wifi_mode = WIFI_MODE_STA;
     wifi_config_t config = {
         .sta = {
-            .ssid = TEMP_SSID,
-            .password = TEMP_PASS,
+            .ssid = "",
+            .password = "",
             .threshold.authmode = WIFI_AUTH_OPEN
         },
     };
+    strncpy((char*) config.sta.ssid, creds->ssid, MAX_SSID_LEN);
+    strncpy((char*) config.sta.password, creds->pass, MAX_SSID_LEN);
 
     ret = esp_wifi_set_mode(WIFI_MODE_STA);
     ret = esp_wifi_set_config(WIFI_IF_STA, &config);
@@ -177,8 +189,4 @@ esp_err_t wifi_ap_mode(int* param) {
     ESP_LOGI(g_wifi_tag, "Switch mode to Wifi AP!");
     ESP_LOGI(g_wifi_tag, "Waiting for Client Connect...");
     return ret;
-}
-
-int wifi_event_handler(int (*func)(int, int)) {
-    return 0;
 }
