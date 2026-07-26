@@ -1,5 +1,8 @@
 #include "http_json_helper.h"
+#include "event_bus.h"
 
+const char* g_http_tag = "HTTP_EVENT";
+static httpd_handle_t http_server_handle = NULL;
 /**
  * format of API when writing
  * - create root object
@@ -15,6 +18,11 @@
  * - return root as string to web (json format) + free root
  */
 
+static void http_with_wifi_disconnect(void* arg, esp_event_base_t base, int32_t id, void* data) {
+    // stop_http_server();
+    ESP_LOGI(g_http_tag, "test http stop!!");
+}
+
 static esp_err_t set_cors_headers(httpd_req_t *req) {
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -25,7 +33,6 @@ static esp_err_t set_cors_headers(httpd_req_t *req) {
 // json main logic send json format as string
 esp_err_t json_response_https(httpd_req_t *req, cJSON *root) {
     char *res = cJSON_Print(root);
-    set_cors_headers(req);
     httpd_resp_set_type(req, DATA_TYPE_JSON);
     httpd_resp_sendstr(req, res);
     free(res);
@@ -86,13 +93,30 @@ esp_err_t json_post_reboot(httpd_req_t *req) {
     return ret;
 }
 
+esp_err_t stop_http_server() {
+    esp_err_t ret = ESP_OK;
+    if (http_server_handle) {
+        ret = httpd_stop(http_server_handle);
+    }
+
+    if (ret == ESP_OK) {
+        http_server_handle = NULL;
+    }
+    else {
+        ESP_LOGE(g_http_tag, "ERROR when trying to stop http!");
+    }
+    return ret;
+}
+
 esp_err_t start_http_server(void) {
-    httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.lru_purge_enable = true;
     config.max_uri_handlers = 16;
     
-    if (httpd_start(&server, &config) == ESP_OK) {
+    esp_event_handler_instance_register(WIFI_APP_EVENT, WIFI_AP_START_EVE, &http_with_wifi_disconnect, 
+                                        NULL, NULL);
+
+    if (httpd_start(&http_server_handle, &config) == ESP_OK) {
         //registry URI handler, in runtime (possible)
         httpd_uri_t uri_s[] = {
             {.uri = ROOT_URI, .method = HTTP_GET, .handler = dashboard_get_handler},
@@ -108,7 +132,7 @@ esp_err_t start_http_server(void) {
         };
         //registry one by one
         for (int i=0; i< sizeof(uri_s)/sizeof(uri_s[0]); i++) {
-            httpd_register_uri_handler(server, &uri_s[i]);
+            httpd_register_uri_handler(http_server_handle, &uri_s[i]);
         }
     }
     return ESP_OK;

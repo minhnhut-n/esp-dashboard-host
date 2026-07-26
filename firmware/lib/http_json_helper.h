@@ -43,4 +43,5 @@ esp_err_t json_get_ping(httpd_req_t* req);
 esp_err_t json_post_relay(httpd_req_t *req);
 
 esp_err_t start_http_server(void);
+esp_err_t stop_http_server(void);
 #endif //_MY_JSON_HELPER_
