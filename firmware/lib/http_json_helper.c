@@ -3,6 +3,17 @@
 
 const char* g_http_tag = "HTTP_EVENT";
 static httpd_handle_t http_server_handle = NULL;
+
+static void http_wifi_stop_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    stop_http_server();
+    ESP_LOGI(g_http_tag, "HTTP server stopped due to WiFi event: %d", (int)event_id);
+}
+
+static void http_wifi_start_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    start_http_server();
+    ESP_LOGI(g_http_tag, "HTTP server started due to WiFi event: %d", (int)event_id);
+}
+
 /**
  * format of API when writing
  * - create root object
@@ -17,11 +28,6 @@ static httpd_handle_t http_server_handle = NULL;
  * - save value (optional)
  * - return root as string to web (json format) + free root
  */
-
-static void http_with_wifi_disconnect(void* arg, esp_event_base_t base, int32_t id, void* data) {
-    // stop_http_server();
-    ESP_LOGI(g_http_tag, "test http stop!!");
-}
 
 static esp_err_t set_cors_headers(httpd_req_t *req) {
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
@@ -72,8 +78,8 @@ esp_err_t json_post_relay(httpd_req_t *req) {
     if (ret <= 0) return ESP_FAIL;
     buf[ret] = '\0';
     cJSON *root = cJSON_Parse(buf);
-    int relay = cJSON_GetObjectItem(root, "relay")->valueint;
-    bool state = cJSON_IsTrue(cJSON_GetObjectItem(root, "state"));
+    // int relay = cJSON_GetObjectItem(root, "relay")->valueint;
+    // bool state = cJSON_IsTrue(cJSON_GetObjectItem(root, "state"));
 
     cJSON_Delete(root);
     cJSON *resp = cJSON_CreateObject();
@@ -93,7 +99,58 @@ esp_err_t json_post_reboot(httpd_req_t *req) {
     return ret;
 }
 
-esp_err_t stop_http_server() {
+esp_err_t http_register_wifi_handler(void) {
+    esp_err_t ret = esp_event_handler_instance_register(
+        WIFI_APP_EVENT,
+        WIFI_AP_STOP_EVE,
+        http_wifi_stop_handler,
+        NULL,
+        NULL);
+
+    if (ret != ESP_OK) {
+        ESP_LOGE(g_http_tag, "failed to register AP stop handler: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = esp_event_handler_instance_register(
+        WIFI_APP_EVENT,
+        WIFI_STA_STOP_EVE,
+        http_wifi_stop_handler,
+        NULL,
+        NULL);
+
+    if (ret != ESP_OK) {
+        ESP_LOGE(g_http_tag, "failed to register STA stop handler: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = esp_event_handler_instance_register(
+        WIFI_APP_EVENT,
+        WIFI_STA_START_EVE,
+        http_wifi_start_handler,
+        NULL,
+        NULL);
+
+    if (ret != ESP_OK) {
+        ESP_LOGE(g_http_tag, "failed to register STA start handler: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = esp_event_handler_instance_register(
+        WIFI_APP_EVENT,
+        WIFI_AP_START_EVE,
+        http_wifi_start_handler,
+        NULL,
+        NULL);
+
+    if (ret != ESP_OK) {
+        ESP_LOGE(g_http_tag, "failed to register AP start handler: %s", esp_err_to_name(ret));
+    }
+
+    return ret;
+}
+
+esp_err_t stop_http_server(void) {
     esp_err_t ret = ESP_OK;
     if (http_server_handle) {
         ret = httpd_stop(http_server_handle);
@@ -105,6 +162,7 @@ esp_err_t stop_http_server() {
     else {
         ESP_LOGE(g_http_tag, "ERROR when trying to stop http!");
     }
+
     return ret;
 }
 
@@ -112,28 +170,27 @@ esp_err_t start_http_server(void) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.lru_purge_enable = true;
     config.max_uri_handlers = 16;
-    
-    esp_event_handler_instance_register(WIFI_APP_EVENT, WIFI_AP_START_EVE, &http_with_wifi_disconnect, 
-                                        NULL, NULL);
 
-    if (httpd_start(&http_server_handle, &config) == ESP_OK) {
-        //registry URI handler, in runtime (possible)
-        httpd_uri_t uri_s[] = {
-            {.uri = ROOT_URI, .method = HTTP_GET, .handler = dashboard_get_handler},
-            {.uri = FAVICON_URI, .method = HTTP_GET, .handler = favicon_get_handler},
-            {.uri = API_DATA, .method = HTTP_GET, .handler = json_get_data},
-            {.uri = API_DATA, .method = HTTP_OPTIONS, .handler = json_options_handler},
-            {.uri = API_PING, .method = HTTP_GET, .handler = json_get_ping},
-            {.uri = API_PING, .method = HTTP_OPTIONS, .handler = json_options_handler},
-            {.uri = API_REBOOT, .method = HTTP_POST, .handler = json_post_reboot},
-            {.uri = API_REBOOT, .method = HTTP_OPTIONS, .handler = json_options_handler},
-            {.uri = API_RELAY, .method = HTTP_POST, .handler = json_post_relay},
-            {.uri = API_RELAY, .method = HTTP_OPTIONS, .handler = json_options_handler},
-        };
-        //registry one by one
-        for (int i=0; i< sizeof(uri_s)/sizeof(uri_s[0]); i++) {
-            httpd_register_uri_handler(http_server_handle, &uri_s[i]);
-        }
+    if (httpd_start(&http_server_handle, &config) != ESP_OK) {
+        return ESP_FAIL;
     }
+
+    httpd_uri_t uri_s[] = {
+        {.uri = ROOT_URI, .method = HTTP_GET, .handler = dashboard_get_handler},
+        {.uri = FAVICON_URI, .method = HTTP_GET, .handler = favicon_get_handler},
+        {.uri = API_DATA, .method = HTTP_GET, .handler = json_get_data},
+        {.uri = API_DATA, .method = HTTP_OPTIONS, .handler = json_options_handler},
+        {.uri = API_PING, .method = HTTP_GET, .handler = json_get_ping},
+        {.uri = API_PING, .method = HTTP_OPTIONS, .handler = json_options_handler},
+        {.uri = API_REBOOT, .method = HTTP_POST, .handler = json_post_reboot},
+        {.uri = API_REBOOT, .method = HTTP_OPTIONS, .handler = json_options_handler},
+        {.uri = API_RELAY, .method = HTTP_POST, .handler = json_post_relay},
+        {.uri = API_RELAY, .method = HTTP_OPTIONS, .handler = json_options_handler},
+    };
+
+    for (int i = 0; i < (int)(sizeof(uri_s) / sizeof(uri_s[0])); i++) {
+        httpd_register_uri_handler(http_server_handle, &uri_s[i]);
+    }
+
     return ESP_OK;
 }
