@@ -35,15 +35,19 @@
 #define ROOT_URI "/"
 #define FAVICON_URI "/favicon.ico"
 
+extern const char* g_http_tag;
+
 //API HANDLE
 esp_err_t json_response_https(httpd_req_t *req, cJSON *root);
+
+void http_wifi_stop_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+void http_wifi_start_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
 esp_err_t json_get_data(httpd_req_t *req);
 esp_err_t json_get_ping(httpd_req_t* req);
 esp_err_t json_post_relay(httpd_req_t *req);
 esp_err_t json_post_reboot(httpd_req_t *req);
-
-esp_err_t http_register_wifi_handler(void);
+esp_err_t json_post_wifi_cred(httpd_req_t *req);
 esp_err_t start_http_server(void);
 esp_err_t stop_http_server(void);
 #endif //_MY_JSON_HELPER_

@@ -4,12 +4,12 @@
 const char* g_http_tag = "HTTP_EVENT";
 static httpd_handle_t http_server_handle = NULL;
 
-static void http_wifi_stop_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+void http_wifi_stop_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     stop_http_server();
     ESP_LOGI(g_http_tag, "HTTP server stopped due to WiFi event: %d", (int)event_id);
 }
 
-static void http_wifi_start_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+void http_wifi_start_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     start_http_server();
     ESP_LOGI(g_http_tag, "HTTP server started due to WiFi event: %d", (int)event_id);
 }
@@ -78,9 +78,52 @@ esp_err_t json_post_relay(httpd_req_t *req) {
     int ret = httpd_req_recv(req, buf, sizeof(buf)-1);
     if (ret <= 0) return ESP_FAIL;
     buf[ret] = '\0';
+
     cJSON *root = cJSON_Parse(buf);
+    if (root == NULL) {
+        ESP_LOGE(g_http_tag, "Failed to parse JSON");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+    
     // int relay = cJSON_GetObjectItem(root, "relay")->valueint;
     // bool state = cJSON_IsTrue(cJSON_GetObjectItem(root, "state"));
+
+    cJSON_Delete(root);
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddStringToObject(resp, "status", "ok");
+    esp_err_t sta = json_response_https(req, resp);
+    cJSON_Delete(resp);
+    return sta;
+}
+
+// End point, POST: /api/wifi_cred
+esp_err_t json_post_wifi_cred(httpd_req_t *req) {
+    char buf[128];
+    int ret = httpd_req_recv(req, buf, sizeof(buf)-1);
+    if (ret <= 0) return ESP_FAIL;
+    buf[ret] = '\0';
+
+    cJSON *root = cJSON_Parse(buf);
+    if (root == NULL) {
+        ESP_LOGE(g_http_tag, "Failed to parse JSON");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    // Process the WiFi credentials (example logic - replace with actual implementation)
+    const char *ssid = cJSON_GetObjectItem(root, "ssid") ? cJSON_GetObjectItem(root, "ssid")->valuestring : NULL;
+    const char *password = cJSON_GetObjectItem(root, "password") ? cJSON_GetObjectItem(root, "password")->valuestring : NULL;
+
+    if (!ssid || !password) {
+        ESP_LOGE(g_http_tag, "Missing WiFi credentials");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing WiFi credentials");
+        cJSON_Delete(root);
+        return ESP_FAIL;
+    }
+
+    // Here you would typically call your WiFi credential setting functions
+    // For example: wifi_set_credentials(ssid, password);
 
     cJSON_Delete(root);
     cJSON *resp = cJSON_CreateObject();
@@ -97,57 +140,6 @@ esp_err_t json_post_reboot(httpd_req_t *req) {
     esp_err_t ret = json_response_https(req, root);
     cJSON_Delete(root);
     esp_restart();
-    return ret;
-}
-
-esp_err_t http_register_wifi_handler(void) {
-    esp_err_t ret = esp_event_handler_instance_register(
-        WIFI_APP_EVENT,
-        WIFI_AP_STOP_EVE,
-        http_wifi_stop_handler,
-        NULL,
-        NULL);
-
-    if (ret != ESP_OK) {
-        ESP_LOGE(g_http_tag, "failed to register AP stop handler: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = esp_event_handler_instance_register(
-        WIFI_APP_EVENT,
-        WIFI_STA_STOP_EVE,
-        http_wifi_stop_handler,
-        NULL,
-        NULL);
-
-    if (ret != ESP_OK) {
-        ESP_LOGE(g_http_tag, "failed to register STA stop handler: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = esp_event_handler_instance_register(
-        WIFI_APP_EVENT,
-        WIFI_STA_START_EVE,
-        http_wifi_start_handler,
-        NULL,
-        NULL);
-
-    if (ret != ESP_OK) {
-        ESP_LOGE(g_http_tag, "failed to register STA start handler: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = esp_event_handler_instance_register(
-        WIFI_APP_EVENT,
-        WIFI_AP_START_EVE,
-        http_wifi_start_handler,
-        NULL,
-        NULL);
-
-    if (ret != ESP_OK) {
-        ESP_LOGE(g_http_tag, "failed to register AP start handler: %s", esp_err_to_name(ret));
-    }
-
     return ret;
 }
 
@@ -182,6 +174,8 @@ esp_err_t start_http_server(void) {
     if (httpd_start(&http_server_handle, &config) != ESP_OK) {
         return ESP_FAIL;
     }
+
+    ESP_LOGI(g_http_tag, "HTTP server started");
 
     httpd_uri_t uri_s[] = {
         {.uri = ROOT_URI, .method = HTTP_GET, .handler = dashboard_get_handler},
