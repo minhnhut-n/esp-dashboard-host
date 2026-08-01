@@ -4,8 +4,8 @@
 
 void app_main() {
     event_bus_init();
-    wifi_init_general();
     http_register_wifi_handler();
+    wifi_init_general();
     vTaskDelay(pdMS_TO_TICKS(3000));
     
     wifi_creds_data_t creds = {

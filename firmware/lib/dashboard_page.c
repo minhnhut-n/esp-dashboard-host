@@ -53,6 +53,7 @@ static const char *dashboard_html =
     "</html>";
 
 esp_err_t dashboard_get_handler(httpd_req_t *req) {
+    ESP_LOGI("HTTP_EVENT", "GET %s", req->uri);
     httpd_resp_set_type(req, GUI_TYPE_HTML);
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     httpd_resp_sendstr(req, dashboard_html);
