@@ -137,6 +137,7 @@ esp_err_t wifi_init_general(void) {
 
 esp_err_t wifi_station_mode(wifi_creds_data_t* creds) {
     if (g_wifi_mode == WIFI_MODE_STA) return ESP_OK;
+    if (creds == NULL) return ESP_ERR_INVALID_ARG;
 
     esp_err_t ret;
     ret = esp_wifi_stop();
@@ -149,8 +150,8 @@ esp_err_t wifi_station_mode(wifi_creds_data_t* creds) {
             .threshold.authmode = WIFI_AUTH_OPEN
         },
     };
-    strncpy((char*) config.sta.ssid, creds->ssid, MAX_SSID_LEN);
-    strncpy((char*) config.sta.password, creds->pass, MAX_SSID_LEN);
+    snprintf((char*) config.sta.ssid, sizeof(config.sta.ssid), "%s", creds->ssid);
+    snprintf((char*) config.sta.password, sizeof(config.sta.password), "%s", creds->pass);
 
     ret = esp_wifi_set_mode(WIFI_MODE_STA);
     ret = esp_wifi_set_config(WIFI_IF_STA, &config);

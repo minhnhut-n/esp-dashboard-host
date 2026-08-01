@@ -7,8 +7,9 @@
 #define MAX_SSID_LEN 32
 #define MAX_PASS_LEN 32
 
-// Register the event base once in the implementation file.
+// Register the event bases once in the implementation file.
 ESP_EVENT_DECLARE_BASE(WIFI_APP_EVENT);
+ESP_EVENT_DECLARE_BASE(HTTP_APP_EVENT);
 
 typedef enum {
     WIFI_CONNECTED_EVE,
@@ -23,6 +24,10 @@ typedef enum {
     WIFI_AP_STA_DISCONNECTED_EVE,
     WIFI_SCAN_DONE_EVE,
 } wifi_event_custom_t;
+
+typedef enum {
+    HTTP_EXIT_EVE,
+} http_event_custom_t;
 
 typedef struct {
     char ssid[MAX_SSID_LEN];
@@ -43,5 +48,8 @@ void event_bus_post_wifi_ap_stop(void);
 void event_bus_post_wifi_ap_sta_connected(void);
 void event_bus_post_wifi_ap_sta_disconnected(void);
 void event_bus_post_wifi_scan_done(void);
+
+void event_bus_post_http_event(http_event_custom_t event_id, void* event_data, size_t event_data_size);
+void event_bus_post_http_exit(void);
 
 #endif // _EVENT_BUS_H_
