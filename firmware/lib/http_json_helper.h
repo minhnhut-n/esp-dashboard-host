@@ -12,6 +12,10 @@
 #include "esp_netif.h"
 #include "dashboard_page.h"
 
+#define WIFI_KEY "wifi_ssid"
+#define WIFI_PASS "wifi_pass"
+#define NVS_STORE_NAME "fstorage"
+
 #define DATA_TYPE_JSON "application/json"
 #define DATA_TYPE_TEXT "text/plain"
 #define DATA_TYPE_BINA "application/octet-stream"
@@ -32,10 +36,15 @@
 #define API_RELAY "/api/relay"
 #define API_REBOOT "/api/reboot"
 #define API_PING "/api/ping"
+#define API_WIFI_CRED "/api/wifi_cred"
+#define API_EXIT "/api/exit"
 #define ROOT_URI "/"
 #define FAVICON_URI "/favicon.ico"
 
 extern const char* g_http_tag;
+
+void save_wifi_creds(const char* ssid, const char* pass);
+void load_wifi_creds(char* ssid_out, size_t ssid_size, char* pass_out, size_t pass_size);
 
 //API HANDLE
 esp_err_t json_response_https(httpd_req_t *req, cJSON *root);

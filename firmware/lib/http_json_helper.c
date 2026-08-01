@@ -1,8 +1,74 @@
 #include "http_json_helper.h"
 #include "event_bus.h"
+#include "nvs_flash.h"
+#include "nvs.h"
+#include <stdio.h>
 
 const char* g_http_tag = "HTTP_EVENT";
 static httpd_handle_t http_server_handle = NULL;
+
+// save configuration
+
+void save_wifi_creds(const char* ssid, const char* pass) {
+    nvs_handle_t nvs_tag;
+    esp_err_t err;
+
+    err = nvs_open(NVS_STORE_NAME, NVS_READWRITE, &nvs_tag);
+    if (err != ESP_OK) {
+        return;
+    }
+
+    nvs_set_str(nvs_tag, WIFI_KEY, ssid);
+    nvs_set_str(nvs_tag, WIFI_PASS, pass);
+    err = nvs_commit(nvs_tag);
+    if (err != ESP_OK) {
+        ESP_LOGE(g_http_tag, "ESP FAIL ON STORING WIFI CREDS");
+    }
+    else {
+        ESP_LOGI(g_http_tag, "Save wifi credential success!, ssid: %s, pass: %s", ssid, pass);
+    }
+    nvs_close(nvs_tag);
+}
+
+void load_wifi_creds(char* ssid_out, size_t ssid_size, char* pass_out, size_t pass_size) {
+    nvs_handle_t nvs_tag;
+    esp_err_t err;
+
+    if (ssid_out != NULL && ssid_size > 0) {
+        ssid_out[0] = '\0';
+    }
+    if (pass_out != NULL && pass_size > 0) {
+        pass_out[0] = '\0';
+    }
+
+    err = nvs_open(NVS_STORE_NAME, NVS_READONLY, &nvs_tag);
+
+    if (err != ESP_OK) {
+        ESP_LOGE(g_http_tag, "NO Credential have been saved");
+    }
+    else {
+        size_t ssid_len = ssid_size;
+        size_t pass_len = pass_size;
+
+        esp_err_t ssid_err = nvs_get_str(nvs_tag, WIFI_KEY, ssid_out, &ssid_len);
+        esp_err_t pass_err = nvs_get_str(nvs_tag, WIFI_PASS, pass_out, &pass_len);
+
+        if (ssid_err == ESP_OK && pass_err == ESP_OK) {
+            ESP_LOGI(g_http_tag, "Get wifi credential! ssid: %s, pass: %s", ssid_out, pass_out);
+        }
+        else {
+            if (ssid_err != ESP_OK && ssid_err != ESP_ERR_NVS_NOT_FOUND) {
+                ESP_LOGW(g_http_tag, "Failed to read SSID from NVS: %s", esp_err_to_name(ssid_err));
+            }
+            if (pass_err != ESP_OK && pass_err != ESP_ERR_NVS_NOT_FOUND) {
+                ESP_LOGW(g_http_tag, "Failed to read password from NVS: %s", esp_err_to_name(pass_err));
+            }
+        }
+    }
+    nvs_close(nvs_tag);
+}
+
+
 
 void http_wifi_stop_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     stop_http_server();
@@ -122,8 +188,11 @@ esp_err_t json_post_wifi_cred(httpd_req_t *req) {
         return ESP_FAIL;
     }
 
-    // Here you would typically call your WiFi credential setting functions
-    // For example: wifi_set_credentials(ssid, password);
+    char ssid_in[MAX_SSID_LEN] = {0};
+    char pass_in[MAX_PASS_LEN] = {0};
+    snprintf(ssid_in, sizeof(ssid_in), "%s", ssid);
+    snprintf(pass_in, sizeof(pass_in), "%s", password);
+    save_wifi_creds(ssid_in, pass_in);
 
     cJSON_Delete(root);
     cJSON *resp = cJSON_CreateObject();
@@ -140,6 +209,17 @@ esp_err_t json_post_reboot(httpd_req_t *req) {
     esp_err_t ret = json_response_https(req, root);
     cJSON_Delete(root);
     esp_restart();
+    return ret;
+}
+
+// End point, POST: /api/exit
+esp_err_t json_post_exit(httpd_req_t *req) {
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "status", "exiting");
+    esp_err_t ret = json_response_https(req, root);
+    //post http exit event to event bus
+    event_bus_post_http_exit();
+    cJSON_Delete(root);
     return ret;
 }
 
@@ -188,6 +268,10 @@ esp_err_t start_http_server(void) {
         {.uri = API_REBOOT, .method = HTTP_OPTIONS, .handler = json_options_handler},
         {.uri = API_RELAY, .method = HTTP_POST, .handler = json_post_relay},
         {.uri = API_RELAY, .method = HTTP_OPTIONS, .handler = json_options_handler},
+        {.uri = API_WIFI_CRED, .method = HTTP_POST, .handler = json_post_wifi_cred},
+        {.uri = API_WIFI_CRED, .method = HTTP_OPTIONS, .handler = json_options_handler},
+        {.uri = API_EXIT, .method = HTTP_POST, .handler = json_post_exit},
+        {.uri = API_EXIT, .method = HTTP_OPTIONS, .handler = json_options_handler},
     };
 
     for (int i = 0; i < (int)(sizeof(uri_s) / sizeof(uri_s[0])); i++) {
