@@ -6,6 +6,12 @@ ESP_EVENT_DEFINE_BASE(WIFI_APP_EVENT);
 static const char* TAG = "EVENT_BUS";
 
 esp_err_t event_bus_init(void) {
+    esp_err_t ret = esp_event_loop_create_default();
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "Failed to create default event loop: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
     ESP_LOGI(TAG, "Event bus initialized with base: WIFI_APP_EVENT");
     return ESP_OK;
 }

@@ -52,6 +52,7 @@ esp_err_t json_options_handler(httpd_req_t *req) {
 
 // End point, GET: /api/ping
 esp_err_t json_get_ping(httpd_req_t* req) {
+    ESP_LOGI(g_http_tag, "GET %s", req->uri);
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "status", "ok");
     cJSON_AddNumberToObject(root, "timestamp", (double)(esp_timer_get_time() / 1000));
@@ -167,6 +168,13 @@ esp_err_t stop_http_server(void) {
 }
 
 esp_err_t start_http_server(void) {
+    if (http_server_handle != NULL) {
+        ESP_LOGI(g_http_tag, "HTTP server already running");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(g_http_tag, "Starting HTTP server...");
+
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.lru_purge_enable = true;
     config.max_uri_handlers = 16;
