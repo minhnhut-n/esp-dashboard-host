@@ -1,6 +1,6 @@
-#include "wifi_api.h"
+#include "wifi_service.h"
 #include "event_bus.h"
-#include "http_json_helper.h"
+#include "http_service.h"
 #include "esp_log.h"
 
 const char wifi_task[] = "WIFI_TASK";

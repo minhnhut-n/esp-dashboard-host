@@ -1,5 +1,5 @@
-#ifndef _MY_JSON_HELPER_
-#define _MY_JSON_HELPER_
+#ifndef _HTTP_SERVICE_H_
+#define _HTTP_SERVICE_H_
 
 #include <cJSON.h>
 #include <esp_http_server.h>
@@ -59,4 +59,4 @@ esp_err_t json_post_reboot(httpd_req_t *req);
 esp_err_t json_post_wifi_cred(httpd_req_t *req);
 esp_err_t start_http_server(void);
 esp_err_t stop_http_server(void);
-#endif //_MY_JSON_HELPER_
+#endif //_HTTP_SERVICE_H_
