@@ -1,142 +1,145 @@
 # ESP Dashboard Host
 
-A professional web-based dashboard for ESP32/ESP8266 devices with real-time sensor monitoring, device control, and comprehensive WiFi/device configuration. Built with Bootstrap 4 and inspired by the CodiePie admin template design.
+A professional web-based dashboard for ESP32 devices with real-time sensor monitoring, device control, and comprehensive WiFi/device configuration. Built with vanilla JavaScript and served directly from the ESP32 device using ESP-IDF HTTP server.
 
 ## Project Structure
 
 ```
 esp-dashboard-host/
-├── dashboard/                  # Web dashboard (standalone HTML + JS)
-│   ├── index.html             # Main dashboard (Bootstrap 4, CodiePie style)
-│   ├── css/
-│   │   └── style.css          # Full stylesheet (dark/light themes, 3 sidebar styles)
-│   └── js/
-│       ├── api.js             # REST API client module
-│       ├── websocket.js       # WebSocket client with auto-reconnect
-│       └── dashboard.js       # Main application logic
-├── firmware/                   # For your ESP-IDF code
-│   ├── src/                   # Source files directory
-│   └── data/                  # SPIFFS/LittleFS data directory
+├── firmware/                      # ESP-IDF firmware
+│   ├── src/
+│   │   └── main.c                 # Main application entry point
+│   ├── lib/
+│   │   ├── dashboard_page.c/h     # HTTP server and dashboard page handler
+│   │   ├── dashboard.html         # Embedded dashboard HTML (served from SPIFFS)
+│   │   ├── dashboard.js           # Dashboard JavaScript (embedded in firmware)
+│   │   ├── wifi_api.c/h           # WiFi management (STA/AP modes)
+│   │   ├── http_json_helper.c/h   # HTTP JSON request/response helpers
+│   │   └── event_bus.c/h          # Event handling system
+│   ├── data/
+│   │   └── web.html               # Simple test page (served from SPIFFS)
+│   ├── include/                   # Header files
+│   ├── test/                      # Unit tests
+│   ├── platformio.ini             # PlatformIO configuration
+│   └── CMakeLists.txt             # ESP-IDF build configuration
+├── .gitignore
+├── LICENSE
 └── README.md
 ```
 
-## Dashboard Features
+## Features
 
-### Main Sections
+### Dashboard Interface
 
-#### Overview
-The main dashboard provides a quick overview of all sensor data:
-- **Temperature Card** - Displays current temperature in °C/°F with a thermometer icon
-- **Humidity Card** - Shows humidity percentage with a water droplet icon
-- **Pressure Card** - Displays atmospheric pressure in hPa with a compression icon
-- **Analog Input Card** - Shows raw analog value or voltage reading
-- **Uptime Card** - Device uptime in hours
-- **WiFi Signal Card** - Current WiFi signal strength in dBm
+The web dashboard is served directly from the ESP32 device and provides:
 
-**Quick Actions Panel:**
-- Relay 1/2/3 buttons for quick toggle
-- Refresh button to manually update data
-- Last update timestamp
+#### Main Dashboard
+- **Sensor Monitoring** - Real-time display of temperature, humidity, pressure, analog inputs
+- **Device Controls** - Relay switches (3x), PWM controls (2x), reboot and factory reset
+- **System Information** - Device info, memory usage, network status, uptime
+- **Quick Actions** - Fast relay toggles, manual refresh, connection status
 
-#### Sensors
-Detailed sensor monitoring with visual indicators:
-- **Environmental Sensors** - Temperature, humidity, and pressure with progress bars
-- **Digital Inputs** - Two digital input indicators (ON/OFF badges)
-- **Analog Display** - Large analog value display with progress bar (0-4095 range)
+#### Configuration Sections
+- **WiFi Settings** - Station/AP/Both modes, static IP, DNS configuration, network scanner
+- **Connection Settings** - ESP IP, WebSocket port, timeout, auto-connect, SSL support
+- **Device Config** - Device name, MQTT settings, NTP/time configuration
+- **Dashboard Settings** - Theme (dark/light/auto), sidebar style, refresh interval, temperature unit
 
-#### Controls
-Device control interface:
-- **Relay Controls** - Three relay switches with ON/OFF state indicators
-- **PWM Controls** - Two PWM sliders (0-255 range) for GPIO 14 and GPIO 12
-- **Device Actions** - Reboot and Factory Reset buttons
-
-#### System
-Comprehensive system information:
-- **Device Info** - Device name, firmware version, chip model, revision, CPU cores/frequency
-- **Memory** - Free/total heap and PSRAM in human-readable format (B/KB/MB/GB)
-- **Network** - IP address, MAC address, WiFi SSID, RSSI, reconnect count
-- **Uptime** - Large uptime display with detailed breakdown
-
-### Configuration Sections
-
-#### WiFi Settings
-Full WiFi configuration with three modes:
-- **Station Mode** - Connect to existing WiFi network
-  - SSID and password configuration
-  - DHCP or Static IP assignment
-  - Static IP fields: IP address, Gateway, Subnet mask
-  - DNS configuration: Primary and secondary DNS servers
-- **Access Point Mode** - ESP acts as WiFi hotspot
-  - AP SSID and password
-  - Channel selection (1, 6, 11)
-  - Max client connections (1, 4, 8)
-  - AP IP address configuration
-- **Station + AP Mode** - Both modes simultaneously
-- **WiFi Band** - 2.4 GHz, 5 GHz, or Auto selection
-- **Hostname** - Device hostname configuration
-- **Network Scanner** - Scan and display available WiFi networks with signal strength and security indicators
-
-#### Connection
-ESP device connection settings:
-- **ESP IP Address** - Target device IP address
-- **WebSocket Port** - Port for WebSocket connection (default: 80)
-- **Connection Timeout** - Timeout in milliseconds (1000-30000)
-- **Auto-connect** - Automatically connect on page load
-- **SSL/WSS** - Use secure WebSocket connection
-- **Connection Status** - Visual indicator, latency, message counts, uptime
-
-#### Device Config
-Device-specific configuration:
-- **Device Name** - Custom device name
-- **MQTT Settings** - Broker address, port, topic prefix
-- **Time & NTP** - Timezone selection, NTP server, update interval
-
-#### Dashboard Settings
-User interface customization:
-- **Theme** - Dark, Light, or Auto (system preference)
-- **Sidebar Style** - Three options:
-  - Style 1: Light theme
-  - Style 2: Light with indicator
-  - Style 3: Dark purple (default)
-- **Refresh Interval** - Auto-refresh interval in milliseconds (100-10000)
-- **Temperature Unit** - Celsius or Fahrenheit
-- **Notification Toggle** - Enable/disable toast notifications
-- **Auto-refresh** - Enable/disable automatic data refresh
-
-### Design Features
-
-- **CodiePie-inspired layout** with top navbar, sidebar, breadcrumbs
-- **3 sidebar styles**: Dark (Style 3), Light (Style 1), Light with indicator (Style 2)
-- **Dark/Light/Auto theme** with full dark mode CSS
-- **Responsive** - works on desktop, tablet, and mobile
-- **Page loader** animation on startup
-- **Toast notifications** for user feedback (success, error, warning, info)
+#### Design Features
+- **CodiePie-inspired layout** with top navbar, sidebar, and breadcrumbs
+- **3 sidebar styles**: Dark purple (default), Light, Light with indicator
+- **Dark/Light/Auto theme** support
+- **Responsive design** - works on desktop, tablet, and mobile
+- **Toast notifications** for user feedback
 - **LocalStorage** for settings persistence
-- **No login required** - direct connection to ESP device
+- **Real-time updates** via WebSocket with auto-reconnect
+
+### Firmware Features
+
+- **ESP-IDF based** - Native ESP-IDF framework with event-driven architecture
+- **HTTP Server** - REST API with JSON endpoints
+- **WebSocket Support** - Real-time bidirectional communication
+- **WiFi Management** - Station, AP, and Station+AP modes with automatic fallback
+- **SPIFFS/LittleFS** - File system for serving web assets
+- **Event Bus System** - Decoupled event handling for WiFi, HTTP, and application events
 
 ## Getting Started
 
-### 1. Open the Dashboard
+### Prerequisites
 
-Simply open `dashboard/index.html` in any modern web browser. No build tools or server required.
+- **ESP-IDF** v4.4 or v5.0+ (recommended)
+- **PlatformIO** (optional, alternative to ESP-IDF)
+- **Python** 3.7+
+- **CMake** 3.16+
+- **Git**
 
-### 2. Connect to ESP Device
+### Installation
 
-1. Go to **Connection** in the sidebar
-2. Enter your ESP device's IP address
-3. Click **Connect**
+#### Option 1: ESP-IDF (Recommended)
 
-The dashboard will connect via WebSocket for real-time updates, with REST API fallback.
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/minhnhut-n/esp-dashboard-host.git
+   cd esp-dashboard-host/firmware
+   ```
 
-### 3. Configure WiFi (sends SSID/password to ESP)
+2. **Set up ESP-IDF environment:**
+   ```bash
+   # Install ESP-IDF (if not already installed)
+   git clone -b release/v5.0 --recursive https://github.com/espressif/esp-idf.git ~/esp/esp-idf
+   cd ~/esp/esp-idf
+   ./install.sh esp32
+   . ./export.sh
+   ```
 
-1. Go to **WiFi Settings**
-2. Select WiFi mode (Station, AP, or Both)
-3. Enter SSID and password
-4. Configure static IP if needed
-5. Click **Save & Apply WiFi**
+3. **Configure the project:**
+   ```bash
+   cd firmware
+   idf.py menuconfig
+   ```
+   
+   Configure:
+   - Serial flasher config → Flash frequency (80MHz)
+   - Partition table → Custom partition table (if needed)
+   - Component config → SPIFFS/LittleFS configuration
 
-The configuration will be sent to your ESP device via the REST API.
+4. **Build and flash:**
+   ```bash
+   idf.py build
+   idf.py -p (PORT) flash
+   ```
+
+5. **Monitor serial output:**
+   ```bash
+   idf.py -p (PORT) monitor
+   ```
+
+#### Option 2: PlatformIO
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/minhnhut-n/esp-dashboard-host.git
+   cd esp-dashboard-host/firmware
+   ```
+
+2. **Build and upload:**
+   ```bash
+   pio run -t upload
+   ```
+
+3. **Monitor serial output:**
+   ```bash
+   pio device monitor
+   ```
+
+### First Use
+
+1. **Power on your ESP32** - It will start in AP mode by default
+2. **Connect to the ESP32 AP** - SSID and password shown in serial monitor
+3. **Access the dashboard** - Open browser and navigate to `http://192.168.4.1`
+4. **Configure WiFi** - Go to WiFi Settings and configure your network
+5. **Connect to your network** - After saving, ESP32 will connect to your WiFi
+6. **Access via local IP** - Use the IP address shown in serial monitor
 
 ## API Reference
 
@@ -144,19 +147,20 @@ The configuration will be sent to your ESP device via the REST API.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/data` | Sensor data (JSON) |
-| GET | `/api/system` | System information (JSON) |
-| POST | `/api/relay` | Set relay `{relay, state}` |
-| POST | `/api/pwm` | Set PWM `{pwm, value}` |
-| POST | `/api/reboot` | Reboot device |
-| POST | `/api/reset` | Factory reset |
-| POST | `/api/wifi` | Set WiFi config (full config object) |
-| GET | `/api/wifi` | Get current WiFi config |
-| GET | `/api/wifi/scan` | Scan nearby WiFi networks |
-| POST | `/api/config` | Set device config (name, MQTT) |
-| GET | `/api/config` | Get device config |
-| POST | `/api/ntp` | Set NTP/time config |
 | GET | `/api/ping` | Health check |
+| GET | `/api/data` | Get sensor data (JSON) |
+| GET | `/api/system` | Get system information (JSON) |
+| POST | `/api/relay` | Control relay `{"relay": 1, "state": true}` |
+| POST | `/api/pwm` | Set PWM `{"pwm": 1, "value": 128}` |
+| POST | `/api/reboot` | Reboot device |
+| POST | `/api/wifi_cred` | Save WiFi credentials `{"ssid": "...", "password": "..."}` |
+| POST | `/api/exit` | Exit AP mode |
+| GET | `/api/wifi` | Get WiFi configuration |
+| POST | `/api/wifi` | Set WiFi configuration |
+| GET | `/api/wifi/scan` | Scan nearby WiFi networks |
+| GET | `/api/config` | Get device configuration |
+| POST | `/api/config` | Set device configuration |
+| POST | `/api/ntp` | Set NTP/time configuration |
 
 ### WebSocket
 
@@ -165,9 +169,9 @@ The configuration will be sent to your ESP device via the REST API.
 - **Auto-reconnect** with exponential backoff
 - **Heartbeat** every 30 seconds
 
-### WebSocket Message Protocol
+### WebSocket Message Format
 
-**Incoming Messages:**
+**Incoming (Device → Dashboard):**
 ```json
 {
   "temperature": 25.5,
@@ -193,13 +197,13 @@ The configuration will be sent to your ESP device via the REST API.
   "deviceName": "ESP-Dashboard",
   "firmwareVersion": "1.0.0",
   "chipModel": "ESP32",
-  "chipRevision": "3",
+  "chipRevision": 3,
   "cpuCores": 2,
   "cpuFreq": 240
 }
 ```
 
-**Outgoing Messages:**
+**Outgoing (Dashboard → Device):**
 ```json
 { "action": "getData" }
 { "action": "setRelay", "relay": 1, "state": true }
@@ -207,63 +211,143 @@ The configuration will be sent to your ESP device via the REST API.
 { "action": "ping" }
 ```
 
-## JavaScript Modules
+## Firmware Architecture
 
-### api.js
-REST API client module that handles all HTTP communication with the ESP device:
-- `setBaseUrl(url)` - Set the API base URL
-- `getSensorData()` - Fetch sensor data
-- `getSystemInfo()` - Fetch system information
-- `setRelay(relay, state)` - Control relay
-- `setPWM(pwm, value)` - Set PWM value
-- `reboot()` - Reboot device
-- `factoryReset()` - Factory reset device
-- `setWiFiConfig(config)` - Configure WiFi
-- `scanWiFi()` - Scan for networks
-- `setDeviceConfig(config)` - Set device configuration
-- `setNTPConfig(config)` - Set NTP configuration
-- `ping()` - Health check
+### Core Components
 
-### websocket.js
-WebSocket client with automatic reconnection:
-- `connect(url)` - Connect to WebSocket
-- `disconnect()` - Disconnect from WebSocket
-- `send(data)` - Send JSON message
-- `requestData(type)` - Request data from device
-- `setRelay(relay, state)` - Set relay via WebSocket
-- `setPWM(pwm, value)` - Set PWM via WebSocket
-- `onMessage` - Callback for incoming messages
-- `onConnect` - Callback for connection established
-- `onDisconnect` - Callback for disconnection
-- `onError` - Callback for errors
+#### WiFi API (`wifi_api.c/h`)
+- Manages WiFi modes: Station, Access Point, Station+AP
+- Handles WiFi credentials storage and retrieval
+- Automatic mode switching and reconnection
+- Network scanning functionality
 
-### dashboard.js
-Main application logic:
-- `init()` - Initialize dashboard
-- `switchSection(section)` - Switch between sections
-- `refreshData()` - Refresh sensor data
-- `handleConnect()` - Connect to ESP device
-- `handleDisconnect()` - Disconnect from ESP device
-- `handleRelayToggle(relay, state)` - Toggle relay
-- `handlePWMChange(pwm, value)` - Change PWM value
-- `handleReboot()` - Reboot device
-- `handleFactoryReset()` - Factory reset device
-- `handleWiFiSave()` - Save WiFi configuration
-- `handleWifiScan()` - Scan WiFi networks
-- `handleDeviceConfigSave()` - Save device configuration
-- `handleNTPSave()` - Save NTP configuration
-- `handleAppearanceSave()` - Save appearance settings
-- `handleDataSettingsSave()` - Save data settings
-- `applyTheme(theme)` - Apply theme (dark/light/auto)
-- `applySidebarStyle(style)` - Apply sidebar style
-- `showToast(message, type)` - Show notification toast
+#### HTTP JSON Helper (`http_json_helper.c/h`)
+- HTTP server initialization and configuration
+- REST endpoint registration
+- JSON request/response parsing
+- CORS header management
+
+#### Event Bus (`event_bus.c/h`)
+- Centralized event handling system
+- WiFi events (connect, disconnect, scan)
+- HTTP server events (start, stop)
+- Application-level events
+
+#### Dashboard Page (`dashboard_page.c/h`)
+- Serves the main dashboard HTML/JS
+- Handles favicon requests
+- Embedded web interface for testing
+
+### Data Flow
+
+```
+User Browser
+    ↓
+HTTP Server (ESP-IDF)
+    ↓
+REST API Handlers / WebSocket Server
+    ↓
+Event Bus
+    ↓
+WiFi API / Application Logic
+    ↓
+Hardware (GPIO, Sensors, etc.)
+```
+
+## Configuration
+
+### ESP-IDF Configuration
+
+Use `idf.py menuconfig` to configure:
+
+- **Serial flasher config**: Set flash frequency and speed
+- **Partition table**: Choose default or custom partition scheme
+- **SPIFFS/LittleFS**: Configure file system parameters
+- **WiFi settings**: Country code, power save mode
+- **Component config**: HTTP server buffer sizes, WebSocket settings
+
+### PlatformIO Configuration
+
+Edit `platformio.ini` to customize:
+
+```ini
+[env:esp32doit-devkit-v1]
+platform = espressif32
+board = esp32doit-devkit-v1
+framework = espidf
+monitor_speed = 115200
+```
+
+Supported boards:
+- ESP32 DevKit V1 (default)
+- ESP32-S2, ESP32-S3, ESP32-C3 (with configuration changes)
+- Any ESP32 variant supported by ESP-IDF
+
+## Development
+
+### Modifying the Dashboard
+
+The dashboard web interface is embedded in the firmware. To modify:
+
+1. **Edit dashboard files:**
+   - `firmware/lib/dashboard.html` - Main HTML structure
+   - `firmware/lib/dashboard.js` - JavaScript logic (if separated)
+   - Or modify the embedded string in `firmware/lib/dashboard_page.c`
+
+2. **Rebuild and flash:**
+   ```bash
+   idf.py build flash
+   ```
+
+### Adding New API Endpoints
+
+1. Register handler in `http_json_helper.c`
+2. Implement handler function
+3. Add URI to `httpd_uri_t` structure
+4. Rebuild firmware
+
+### Extending Sensor Support
+
+1. Add sensor reading code in `main.c` or separate module
+2. Include sensor data in WebSocket messages
+3. Update dashboard HTML/JS to display new sensor
+4. Add configuration options if needed
+
+## Troubleshooting
+
+### ESP32 not showing up in serial port
+- Install CP210x or CH340 drivers (depending on your board)
+- Check USB cable (must be data-capable)
+- Try different USB port
+
+### Cannot connect to AP mode
+- Ensure you're connecting to the correct SSID
+- Check password (shown in serial monitor)
+- Try disabling firewall temporarily
+
+### Dashboard not loading
+- Check if SPIFFS partition is properly formatted
+- Verify HTTP server started (check serial logs)
+- Try accessing `http://192.168.4.1` directly
+
+### WebSocket connection fails
+- Ensure device and browser are on same network
+- Check firewall settings
+- Verify WebSocket endpoint is `/ws`
 
 ## Tech Stack
 
+### Firmware
+- **Framework**: ESP-IDF v4.4/v5.0+
+- **Language**: C
+- **Build System**: CMake/PlatformIO
+- **HTTP Server**: ESP-IDF HTTP Server Component
+- **WebSocket**: ESP-IDF WebSocket Server Component
+- **File System**: SPIFFS/LittleFS
+
+### Dashboard
 - **Frontend**: HTML5, CSS3, Vanilla JavaScript
-- **CSS Framework**: Bootstrap 4.6.2 (CDN)
 - **Icons**: Font Awesome 5 (CDN)
-- **jQuery**: 3.6.0 (for Bootstrap components)
 - **Communication**: WebSocket (primary) + REST API (fallback)
 - **Storage**: LocalStorage for settings persistence
 
@@ -276,4 +360,12 @@ Main application logic:
 
 ## License
 
-MIT
+Custom license as attachment in repository
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues and pull requests.
+
+## Author
+
+minhnhut-n
