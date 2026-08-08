@@ -14,22 +14,114 @@ struct wifi_manager {
     SemaphoreHandle_t mutex;
 };
 
+static esp_err_t wifi_manager_creads_update(wifi_manager_t* mgr) {
+    if (mgr == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memcpy(mgr->config.ap.ssid, mgr->creds.ssid, MAX_SSID_LEN);
+    memcpy(mgr->config.ap.password, mgr->creds.pass, MAX_PASS_LEN);
+
+    memcpy(mgr->config.sta.ssid, mgr->creds.ssid, MAX_SSID_LEN);
+    memcpy(mgr->config.sta.password, mgr->creds.pass, MAX_PASS_LEN);
+
+    return ESP_OK;
+}
+
 wifi_manager_t* wifi_manager_create(void) {
     wifi_manager_t* mgr = calloc(1, sizeof(wifi_manager_t));
-    if (!mgr) return NULL;
+    if (mgr == NULL) {
+        return NULL;
+    }
 
     mgr->mutex = xSemaphoreCreateMutex();
     if (mgr->mutex == NULL) {
-        ESP_LOGI(wifi_log_tag, "fail to create semaphore");
+        ESP_LOGI(wifi_log_tag, "Fail to create semaphore!");
         free(mgr);
         return NULL;
     }
+
     return mgr;
 }
 
-// esp_err_t wifi_manager_destroy(wifi_manager_t obj);
-// esp_err_t wifi_manager_init(wifi_manager_t obj);
-// esp_err_t wifi_manager_get_config(wifi_manager_t obj, wifi_mode_t mode, wifi_config_t* config);
-// esp_err_t wifi_manager_set_config(wifi_manager_t obj, wifi_mode_t mode, const wifi_config_t* config);
-// esp_err_t wifi_manager_set_mode(wifi_manager_t obj, wifi_mode_t mode);
-// wifi_mode_t wifi_manager_get_mode(wifi_manager_t obj);
+esp_err_t wifi_manager_destroy(wifi_manager_t* mgr) {
+    if (mgr == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    vSemaphoreDelete(mgr->mutex);
+    free(mgr);
+    return ESP_OK;
+}
+
+esp_err_t wifi_manager_set_mode(wifi_manager_t* mgr, wifi_mode_t mode) {
+    if (mgr == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    if (xSemaphoreTake(mgr->mutex, portMAX_DELAY) == pdTRUE) {
+        mgr->mode = mode;
+    }
+    xSemaphoreGive(mgr->mutex);
+    
+    return ESP_OK;
+}
+
+wifi_mode_t wifi_manager_get_mode(wifi_manager_t* mgr) {
+    if (mgr == NULL) {
+        ESP_LOGI(wifi_log_tag, "Invalid argument for getting mode!!");
+        return WIFI_MODE_NULL;
+    }
+
+    wifi_mode_t mode = WIFI_MODE_NULL;
+    if (xSemaphoreTake(mgr->mutex, portMAX_DELAY) == pdTRUE) {
+        mode = mgr->mode;
+    }
+    xSemaphoreGive(mgr->mutex);
+
+    return mode;
+}
+
+esp_err_t wifi_manager_set_credentials(wifi_manager_t* mgr, uint8_t* ssid, uint8_t* pass) {
+    if (mgr == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    if (xSemaphoreTake(mgr->mutex, portMAX_DELAY) == pdTRUE) {
+        memcpy(mgr->creds.ssid, ssid, MAX_SSID_LEN);
+        memcpy(mgr->creds.pass, pass, MAX_PASS_LEN);
+    }
+    esp_err_t ret = wifi_manager_creads_update(mgr);
+    xSemaphoreGive(mgr->mutex);
+
+    return ret;
+}
+wifi_credentials_t wifi_manager_get_credentials(wifi_manager_t* mgr) {
+
+    wifi_credentials_t cred;
+    if (mgr == NULL) {
+        ESP_LOGI(wifi_log_tag, "Invalid argument for getting credential !!");
+        return cred;
+    }
+
+    if (xSemaphoreTake(mgr->mutex, portMAX_DELAY) == pdTRUE) {
+        memcpy(cred.ssid, mgr->creds.ssid, MAX_SSID_LEN);
+        memcpy(cred.pass, mgr->creds.pass, MAX_PASS_LEN);
+    }
+    xSemaphoreGive(mgr->mutex);
+
+    return cred;
+}
+
+esp_err_t wifi_manager_set_config(wifi_manager_t* mgr, wifi_config_t* config) {
+    if (mgr == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (xSemaphoreTake(mgr->mutex, portMAX_DELAY) == pdTRUE) {
+        memcpy(&mgr->config, config, sizeof(wifi_config_t));
+    }
+    xSemaphoreGive(mgr->mutex);
+
+    return ESP_OK;
+}

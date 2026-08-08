@@ -1,7 +1,0 @@
--Wno-frame-address
--mlongcalls
--fno-builtin-memcpy
--fno-builtin-memset
--fno-builtin-bzero
-"-specs=E:/gitRepos/esp-dashboard-host/firmware/.pio/build/esp32doit-devkit-v1/specs/picolibc.specs"
--fno-rtti
