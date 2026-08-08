@@ -1,8 +1,5 @@
 SET (SOURCE ${CMAKE_SOURCE_DIR}/src/main.c
-                ${CMAKE_SOURCE_DIR}/lib/wifi_api.c
-                ${CMAKE_SOURCE_DIR}/lib/http_json_helper.c
-                ${CMAKE_SOURCE_DIR}/lib/dashboard_page.c
-                ${CMAKE_SOURCE_DIR}/lib/event_bus.c)
+    )  
 
 SET (INCLUDE_DIR ${CMAKE_SOURCE_DIR}/src
                  ${CMAKE_SOURCE_DIR}/lib/)
