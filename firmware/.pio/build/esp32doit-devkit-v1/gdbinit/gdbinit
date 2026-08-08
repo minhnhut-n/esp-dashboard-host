@@ -1,0 +1,2 @@
+source E:/gitRepos/esp-dashboard-host/firmware/.pio/build/esp32doit-devkit-v1/gdbinit/symbols
+source E:/gitRepos/esp-dashboard-host/firmware/.pio/build/esp32doit-devkit-v1/gdbinit/connect

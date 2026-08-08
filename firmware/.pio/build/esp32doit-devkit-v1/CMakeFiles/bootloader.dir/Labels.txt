@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+E:/gitRepos/esp-dashboard-host/firmware/.pio/build/esp32doit-devkit-v1/CMakeFiles/bootloader
+E:/gitRepos/esp-dashboard-host/firmware/.pio/build/esp32doit-devkit-v1/CMakeFiles/bootloader.rule
+E:/gitRepos/esp-dashboard-host/firmware/.pio/build/esp32doit-devkit-v1/CMakeFiles/bootloader-complete.rule
+E:/gitRepos/esp-dashboard-host/firmware/.pio/build/esp32doit-devkit-v1/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+E:/gitRepos/esp-dashboard-host/firmware/.pio/build/esp32doit-devkit-v1/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+E:/gitRepos/esp-dashboard-host/firmware/.pio/build/esp32doit-devkit-v1/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+E:/gitRepos/esp-dashboard-host/firmware/.pio/build/esp32doit-devkit-v1/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+E:/gitRepos/esp-dashboard-host/firmware/.pio/build/esp32doit-devkit-v1/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+E:/gitRepos/esp-dashboard-host/firmware/.pio/build/esp32doit-devkit-v1/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+E:/gitRepos/esp-dashboard-host/firmware/.pio/build/esp32doit-devkit-v1/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
