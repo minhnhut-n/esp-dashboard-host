@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "firmware",
+			"path": "firmware"
+		}
+	],
+	"settings": {
+		"powershell.cwd": "esp-dashboard-host"
+	}
+}
