@@ -21,6 +21,7 @@ typedef struct {
 } wifi_credentials_t;
 
 esp_err_t wifi_manager_set_config(wifi_manager_t* mgr, wifi_config_t* config);
+esp_err_t wifi_manager_get_config(wifi_manager_t* mgr, wifi_config_t* config);
 
 wifi_manager_t* wifi_manager_create(void);
 esp_err_t wifi_manager_destroy(wifi_manager_t* mgr);

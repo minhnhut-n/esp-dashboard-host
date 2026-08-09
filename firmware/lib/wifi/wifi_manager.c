@@ -125,3 +125,16 @@ esp_err_t wifi_manager_set_config(wifi_manager_t* mgr, wifi_config_t* config) {
 
     return ESP_OK;
 }
+
+esp_err_t wifi_manager_get_config(wifi_manager_t* mgr, wifi_config_t* config) {
+    if (mgr == NULL || config == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (xSemaphoreTake(mgr->mutex, portMAX_DELAY) == pdTRUE) {
+        memcpy(config, &mgr->config, sizeof(wifi_config_t));
+    }
+    xSemaphoreGive(mgr->mutex);
+
+    return ESP_OK;
+}
