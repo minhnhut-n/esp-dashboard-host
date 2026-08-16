@@ -16,10 +16,10 @@ extern "C" {
 
 typedef enum {
     //access point event
-    WIFI_SRV_EVENT_START,           /* Bring up wifi driver stack            */
-    WIFI_SRV_EVENT_STOP,            /* Tear down wifi driver stack           */
-    WIFI_SRV_EVENT_CONNECT,         /* data: wifi_credentials_t* (copied)    */
-    WIFI_SRV_EVENT_DISCONNECT,      /* Disconnect from AP                    */
+    WIFI_SRV_EVENT_START,           // start with ap mode (default)
+    WIFI_SRV_EVENT_STOP,            // stop wifi
+    WIFI_SRV_EVENT_CONNECT,         // only spend for STA mode (to connect with router)
+    WIFI_SRV_EVENT_DISCONNECT,      // (STA/ Ap) esp disconnect with paired device.
 
     //station event
     WIFI_SRV_EVENT_STA_STARTED,     /* Driver started, ready for connect     */
