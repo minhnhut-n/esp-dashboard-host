@@ -39,6 +39,7 @@ typedef struct {
     QueueHandle_t unified_queue;
     TaskHandle_t   task_handle;
     bool           started;
+    wifi_manager_t* mgr;   /* single manager from main (mode + creds) */
 } wifi_srv_ctx_t;
 
 
@@ -50,6 +51,7 @@ static wifi_srv_ctx_t wifi_srv_ctx = {
     .unified_queue = NULL,
     .task_handle   = NULL,
     .started       = false,
+    .mgr           = NULL,
 };
 
 // not public
@@ -70,7 +72,6 @@ static void wifi_service_task(void* arg) {
             continue;
         }
 
-        /* Delegate to FSM: fast (<1ms), triggers async drivers then returns */
         esp_err_t err = wifi_handler_process_event(msg.event, msg.data);
         if (err != ESP_OK) {
             ESP_LOGW(TAG, "handler rejected event %d: %s", msg.event, esp_err_to_name(err));
@@ -92,7 +93,7 @@ esp_err_t wifi_srv_init(wifi_manager_t* mgr) {
             return ESP_ERR_NO_MEM;
         }
     }
-    //done in wifi_service init
+    wifi_srv_ctx.mgr = mgr;   // keep the manager for switch_mode
 
     return wifi_handler_init(mgr);
 }
@@ -145,8 +146,7 @@ esp_err_t wifi_srv_post_event(wifi_srv_event_t event, void* data) {
         msg.data = creds; // data is pointed to heap mem -> free is needed.
     }
 
-    // send message to queue (handled by another task - planning with scheduler)
-    // this is internal queue
+    //internal queue
     BaseType_t ret = xQueueSend(wifi_srv_ctx.unified_queue, &msg, 0);
     // when it fail
     if (ret != pdTRUE) {
@@ -161,6 +161,30 @@ esp_err_t wifi_srv_post_event(wifi_srv_event_t event, void* data) {
     // free/ deallocation moved to "wifi_handler_update_credentials()" under it data is used.
 
     return ESP_OK;
+}
+
+esp_err_t wifi_srv_switch_mode(wifi_mode_t mode) {
+    if (wifi_srv_ctx.unified_queue == NULL || wifi_srv_ctx.mgr == NULL) {
+        ESP_LOGE(TAG, "call wifi_srv_init first");
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (mode != WIFI_MODE_AP && mode != WIFI_MODE_STA) {
+        ESP_LOGE(TAG, "unsupported mode %d", mode);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* The driver task is the single serialization point: it stops any
+       currently-running mode and applies the new mode/config atomically
+       in its own context. So we only update the manager and post a single
+       START - no separate STOP event (avoids cross-task race where
+       set_mode/set_config collide with a pending wifi teardown). */
+    if (mode == wifi_manager_get_mode(wifi_srv_ctx.mgr)) return ESP_OK;
+    wifi_manager_set_mode(wifi_srv_ctx.mgr, mode);
+
+    wifi_srv_event_t start_event = (mode == WIFI_MODE_AP)
+                                       ? WIFI_SRV_AP_EVENT_START
+                                       : WIFI_SRV_STA_EVENT_START;
+    return wifi_srv_post_event(start_event, NULL);
 }
 
 esp_err_t wifi_srv_stop(void) {

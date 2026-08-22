@@ -7,10 +7,18 @@
  *   WIFI_SRV_EVENT_START  -> init netif + esp_wifi, start as AP
  *   WIFI_SRV_EVENT_STOP   -> stop driver
  *   WIFI_SRV_EVENT_CONNECT-> not supported yet (STA comes later)
+ *
+ * Async design:
+ *   wifi_handler_start_driver() only spawns wifi_driver_task and returns
+ *   immediately, so wifi_service_task is never blocked by the long
+ *   esp_wifi_init()/esp_wifi_start() sequence. The driver task performs
+ *   the blocking init and updates the FSM state when done.
  */
 
 #include <stdlib.h>
 #include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "esp_event.h"
@@ -20,23 +28,32 @@
 
 static const char* TAG = "wifi_handler";
 
-#define WIFI_HANDLER_DEFAULT_AP_SSID   "esp-alex"
-#define WIFI_HANDLER_DEFAULT_AP_PASS   "alex1234"
 #define WIFI_HANDLER_DEFAULT_AP_MAXCON 4
 #define WIFI_HANDLER_DEFAULT_AP_CHANNEL 1
+/* 8KB: the switch sequence calls esp_wifi_stop/set_mode/set_config/start
+   + esp_wifi_connect, plus large local structs (wifi_config_t etc.).
+   4KB was too small and caused a silent stack overflow -> task death. */
+#define WIFI_HANDLER_DRIVER_TASK_STACK 8192
+#define WIFI_HANDLER_DRIVER_TASK_PRIO  5
 
 typedef struct wifi_handler {
     wifi_manager_t* mgr;
     wifi_fsm_state_t state;
+    TaskHandle_t driver_task;   /* non-NULL while driver init is in progress */
+    bool wifi_inited;           /* esp_wifi_init done (only once per boot)   */
 } wifi_handler_t;
 
 /* singleton pattern */
 static wifi_handler_t* s_handler = NULL;
 
+/* Event handler: arg -> wifi_handler_t* (the singleton), event_data -> payload.
+   Wired for both WIFI_EVENT and IP_EVENT so state stays in sync. */
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                                int32_t event_id, void* event_data) {
-    (void)arg;
-    (void)event_data;
+    wifi_handler_t* handler = (wifi_handler_t*)arg;
+    if (handler == NULL) {
+        return;
+    }
 
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
@@ -44,98 +61,264 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
             ESP_LOGI(TAG, "STA interface started");
             break;
         case WIFI_EVENT_AP_START:
+            handler->state = WIFI_FSM_STATE_RUNNING;
             ESP_LOGI(TAG, "AP started");
             break;
+        case WIFI_EVENT_STA_CONNECTED:
+            handler->state = WIFI_FSM_STATE_CONNECTED;
+            ESP_LOGI(TAG, "STA connected");
+            break;
+        case WIFI_EVENT_STA_DISCONNECTED:
+            if (event_data != NULL) {
+                wifi_event_sta_disconnected_t* dis =
+                    (wifi_event_sta_disconnected_t*)event_data;
+                ESP_LOGI(TAG, "STA disconnected, reason=%d", dis->reason);
+            } else {
+                ESP_LOGI(TAG, "STA disconnected");
+            }
+            handler->state = WIFI_FSM_STATE_CONNECTING;
+            break;
         case WIFI_EVENT_AP_STACONNECTED:
-            ESP_LOGI(TAG, "station connected to AP");
+            if (event_data != NULL) {
+                wifi_event_ap_staconnected_t* info =
+                    (wifi_event_ap_staconnected_t*)event_data;
+                ESP_LOGI(TAG, "station connected to AP (aid=%d)", info->aid);
+            } else {
+                ESP_LOGI(TAG, "station connected to AP");
+            }
             break;
         case WIFI_EVENT_AP_STADISCONNECTED:
-            ESP_LOGI(TAG, "station disconnected from AP");
+            if (event_data != NULL) {
+                wifi_event_ap_stadisconnected_t* info =
+                    (wifi_event_ap_stadisconnected_t*)event_data;
+                ESP_LOGI(TAG, "station disconnected from AP (aid=%d)", info->aid);
+            } else {
+                ESP_LOGI(TAG, "station disconnected from AP");
+            }
             break;
         default:
             break;
         }
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        if (event_data != NULL) {
+            ip_event_got_ip_t* ip_info = (ip_event_got_ip_t*)event_data;
+            handler->state = WIFI_FSM_STATE_CONNECTED;
+            ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&ip_info->ip_info.ip));
+        }
     }
 }
 
-static esp_err_t wifi_handler_start_driver(void) {
-    esp_netif_init();
+/* Runs in its own task so wifi_service_task is never blocked by the long
+   esp_wifi_init()/esp_wifi_start() sequence.
+   arg = wifi_manager_t* : the single manager from main -> mode + creds
+   are read through the manager API (single source of truth). */
+static void wifi_start_with_mode(void* arg) {
+    wifi_manager_t* mgr = (wifi_manager_t*)arg;
+    if (mgr == NULL) {
+        ESP_LOGE(TAG, "driver task: manager is NULL");
+        s_handler->state = WIFI_FSM_STATE_POWER_OFF;
+        s_handler->driver_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
 
-    esp_err_t err = esp_event_loop_create_default();
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE(TAG, "create default event loop failed: %s", esp_err_to_name(err));
+    wifi_mode_t mode = wifi_manager_get_mode(mgr);
+    esp_err_t err = ESP_OK;
+
+    /* One-time init: netif, event loop, esp_wifi_init, event handlers.
+       esp_wifi_init() may only be called once per boot - on mode switches
+       we skip this block and go straight to set_mode/set_config/start. */
+    if (!s_handler->wifi_inited) {
+        esp_netif_init();
+
+        err = esp_event_loop_create_default();
+        if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+            ESP_LOGE(TAG, "create default event loop failed: %s", esp_err_to_name(err));
+            s_handler->state = WIFI_FSM_STATE_POWER_OFF;
+            s_handler->driver_task = NULL;
+            vTaskDelete(NULL);
+            return;
+        }
+
+        /* Create both netifs up front so switching AP <-> STA later
+           does not need to re-create them (esp_wifi_set_mode requires
+           the matching netif to exist). */
+        esp_netif_create_default_wifi_ap();
+        esp_netif_create_default_wifi_sta();
+
+        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+        err = esp_wifi_init(&cfg);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_wifi_init failed: %s", esp_err_to_name(err));
+            s_handler->state = WIFI_FSM_STATE_POWER_OFF;
+            s_handler->driver_task = NULL;
+            vTaskDelete(NULL);
+            return;
+        }
+
+        esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
+                                   wifi_event_handler, s_handler);
+        esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                   wifi_event_handler, s_handler);
+
+        s_handler->wifi_inited = true;
+    }
+
+    /* Atomic switch: if a previous mode is still running (e.g. AP -> STA),
+       stop it HERE in this same task BEFORE applying the new mode. This
+       avoids the race where set_mode/set_config collide with the async
+       wifi teardown of esp_wifi_stop() -> ESP_ERR_WIFI_MODE. */
+    if (s_handler->state != WIFI_FSM_STATE_POWER_OFF) {
+        ESP_LOGI(TAG, "stopping current driver before switching mode");
+        err = esp_wifi_stop();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_wifi_stop (switch) failed: %s", esp_err_to_name(err));
+            s_handler->state = WIFI_FSM_STATE_POWER_OFF;
+            s_handler->driver_task = NULL;
+            vTaskDelete(NULL);
+            return;
+        }
+        ESP_LOGI(TAG, "previous driver stopped, switching to mode %d", mode);
+        s_handler->state = WIFI_FSM_STATE_POWER_OFF;
+    }
+
+    /* Get credentials from the manager (single source of truth) */
+    wifi_credentials_t creds = wifi_manager_get_credentials(mgr);
+
+    if (mode == WIFI_MODE_AP) 
+    {
+        /* Build AP config from the manager credentials */
+        wifi_config_t ap_config;
+        memset(&ap_config, 0, sizeof(ap_config));
+        snprintf((char*)ap_config.ap.ssid, sizeof(ap_config.ap.ssid), "%s",
+                 creds.ssid);
+        ap_config.ap.max_connection = WIFI_HANDLER_DEFAULT_AP_MAXCON;
+        ap_config.ap.channel        = WIFI_HANDLER_DEFAULT_AP_CHANNEL;
+        ap_config.ap.authmode       = WIFI_AUTH_OPEN; /* open network for testing */
+
+        /* For open networks the password must be empty (ESP-IDF validates this) */
+        if (ap_config.ap.authmode == WIFI_AUTH_OPEN) {
+            ap_config.ap.password[0] = '\0';
+        } else {
+            snprintf((char*)ap_config.ap.password, sizeof(ap_config.ap.password), "%s",
+                     creds.pass);
+        }
+
+        err = esp_wifi_set_mode(WIFI_MODE_AP);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_wifi_set_mode failed: %s", esp_err_to_name(err));
+            s_handler->state = WIFI_FSM_STATE_POWER_OFF;
+            s_handler->driver_task = NULL;
+            vTaskDelete(NULL);
+            return;
+        }
+        /* NOTE: esp_wifi_set_config() takes wifi_interface_t (WIFI_IF_AP=1),
+           NOT wifi_mode_t (WIFI_MODE_AP=2). Passing the mode value made the
+           internal switch fall into the STA branch on AP start - and vice
+           versa - producing ESP_ERR_WIFI_MODE after a mode switch. */
+        err = esp_wifi_set_config(WIFI_IF_AP, &ap_config);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_wifi_set_config failed: %s", esp_err_to_name(err));
+            s_handler->state = WIFI_FSM_STATE_POWER_OFF;
+            s_handler->driver_task = NULL;
+            vTaskDelete(NULL);
+            return;
+        }
+        err = esp_wifi_start();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_wifi_start failed: %s", esp_err_to_name(err));
+            s_handler->state = WIFI_FSM_STATE_POWER_OFF;
+            s_handler->driver_task = NULL;
+            vTaskDelete(NULL);
+            return;
+        }
+        s_handler->state = WIFI_FSM_STATE_RUNNING;
+        ESP_LOGI(TAG, "AP mode started (ssid=%s)", creds.ssid);
+
+    } 
+    else
+    {
+        /* Build STA config from the manager credentials */
+        wifi_config_t sta_config;
+        memset(&sta_config, 0, sizeof(sta_config));
+        snprintf((char*)sta_config.sta.ssid, sizeof(sta_config.sta.ssid), "%s",
+                 creds.ssid);
+        snprintf((char*)sta_config.sta.password, sizeof(sta_config.sta.password), "%s",
+                 creds.pass);
+        sta_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
+
+        ESP_LOGI(TAG, "STA: set_mode");
+        err = esp_wifi_set_mode(WIFI_MODE_STA);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_wifi_set_mode failed: %s", esp_err_to_name(err));
+            s_handler->state = WIFI_FSM_STATE_POWER_OFF;
+            s_handler->driver_task = NULL;
+            vTaskDelete(NULL);
+            return;
+        }
+        ESP_LOGI(TAG, "STA: set_config");
+        /* wifi_interface_t: WIFI_IF_STA=0, NOT WIFI_MODE_STA=1 */
+        err = esp_wifi_set_config(WIFI_IF_STA, &sta_config);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_wifi_set_config failed: %s", esp_err_to_name(err));
+            s_handler->state = WIFI_FSM_STATE_POWER_OFF;
+            s_handler->driver_task = NULL;
+            vTaskDelete(NULL);
+            return;
+        }
+        ESP_LOGI(TAG, "STA: start");
+        err = esp_wifi_start();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_wifi_start failed: %s", esp_err_to_name(err));
+            s_handler->state = WIFI_FSM_STATE_POWER_OFF;
+            s_handler->driver_task = NULL;
+            vTaskDelete(NULL);
+            return;
+        }
+
+        s_handler->state = WIFI_FSM_STATE_CONNECTING;
+        ESP_LOGI(TAG, "STA: connect");
+        err = esp_wifi_connect();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_wifi_connect failed: %s", esp_err_to_name(err));
+            s_handler->state = WIFI_FSM_STATE_IDLE;
+        }
+        ESP_LOGI(TAG, "STA mode connecting to %s", creds.ssid);
+    }
+
+    s_handler->driver_task = NULL;
+    vTaskDelete(NULL);
+}
+
+/* Non-blocking: spawn the driver task with the manager as arg and return
+   immediately so wifi_service_task can keep draining the unified queue. */
+static esp_err_t wifi_handler_start_driver(void) {
+    if (s_handler->driver_task != NULL) {
+        ESP_LOGW(TAG, "driver task already running");
+        return ESP_OK;
+    }
+
+    BaseType_t ret = xTaskCreate(wifi_start_with_mode, "wifi_driver_task",
+                                 WIFI_HANDLER_DRIVER_TASK_STACK,
+                                 s_handler->mgr,
+                                 WIFI_HANDLER_DRIVER_TASK_PRIO,
+                                 &s_handler->driver_task);
+    if (ret != pdPASS) {
+        ESP_LOGE(TAG, "failed to create wifi_driver_task");
         return ESP_ERR_NO_MEM;
     }
 
-    esp_netif_create_default_wifi_ap();
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    err = esp_wifi_init(&cfg);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_init failed: %s", esp_err_to_name(err));
-        return ESP_ERR_WIFI_NOT_INIT;
-    }
-
-    esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-                               wifi_event_handler, NULL);
-
-    /* Get credentials from the manager (seeded in main.c) */
-    wifi_credentials_t creds = wifi_manager_get_credentials(s_handler->mgr);
-
-    /* Fall back to defaults if manager creds are empty */
-    if (creds.ssid[0] == '\0') {
-        snprintf((char*)creds.ssid, sizeof(creds.ssid), "%s",
-                 WIFI_HANDLER_DEFAULT_AP_SSID);
-        snprintf((char*)creds.pass, sizeof(creds.pass), "%s",
-                 WIFI_HANDLER_DEFAULT_AP_PASS);
-    }
-
-    /* Build AP config from the manager credentials */
-    wifi_config_t ap_config;
-    memset(&ap_config, 0, sizeof(ap_config));
-    snprintf((char*)ap_config.ap.ssid, sizeof(ap_config.ap.ssid), "%s",
-             creds.ssid);
-    ap_config.ap.max_connection = WIFI_HANDLER_DEFAULT_AP_MAXCON;
-    ap_config.ap.channel       = WIFI_HANDLER_DEFAULT_AP_CHANNEL;
-    ap_config.ap.authmode      = WIFI_AUTH_OPEN; /* open network for testing */
-
-    /* For open networks the password must be empty (ESP-IDF validates this) */
-    if (ap_config.ap.authmode == WIFI_AUTH_OPEN) {
-        ap_config.ap.password[0] = '\0';
-    } else {
-        snprintf((char*)ap_config.ap.password, sizeof(ap_config.ap.password), "%s",
-                 creds.pass);
-    }
-
-    err = esp_wifi_set_mode(WIFI_MODE_AP);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_set_mode failed: %s", esp_err_to_name(err));
-        return err;
-    }
-    err = esp_wifi_set_config(WIFI_MODE_AP, &ap_config);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_set_config failed: %s", esp_err_to_name(err));
-        return err;
-    }
-    err = esp_wifi_start();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_start failed: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    s_handler->state = WIFI_FSM_STATE_RUNNING;
-    ESP_LOGI(TAG, "AP mode started (ssid=%s)", creds.ssid);
     return ESP_OK;
 }
 
 esp_err_t wifi_handler_process_event(wifi_srv_event_t event, void* data) {
     switch (event) {
 
-    case WIFI_SRV_EVENT_START:
-        if (s_handler->state != WIFI_FSM_STATE_POWER_OFF) {
-            ESP_LOGW(TAG, "START ignored - driver already running");
-            return ESP_OK;
-        }
+    case WIFI_SRV_AP_EVENT_START:
+    case WIFI_SRV_STA_EVENT_START:
+        /* The driver task is the single serialization point: it stops any
+           currently-running mode first, then applies the new mode/config.
+           The driver_task handle guards against concurrent driver tasks. */
         return wifi_handler_start_driver();
 
     case WIFI_SRV_EVENT_STOP:
@@ -152,11 +335,25 @@ esp_err_t wifi_handler_process_event(wifi_srv_event_t event, void* data) {
 
     
     case WIFI_SRV_EVENT_CONNECT:
-        if (data != NULL) {
-            free(data);
+        /* data is heap-allocated wifi_credentials_t from wifi_service */
+        if (data == NULL) {
+            return ESP_ERR_INVALID_ARG;
         }
-        ESP_LOGW(TAG, "CONNECT not supported - AP only for now");
-        return ESP_ERR_NOT_SUPPORTED;
+        wifi_credentials_t* creds = (wifi_credentials_t*)data;
+        wifi_manager_set_credentials(s_handler->mgr,
+                                     (uint8_t*)creds->ssid,
+                                     (uint8_t*)creds->pass);
+        free(data);
+
+        /* If the driver is already running in STA mode, apply new creds
+           and reconnect. If it is OFF, the user should post STA_START. */
+        if (s_handler->state == WIFI_FSM_STATE_CONNECTING ||
+            s_handler->state == WIFI_FSM_STATE_CONNECTED) {
+            esp_wifi_disconnect();
+            esp_wifi_connect();
+            s_handler->state = WIFI_FSM_STATE_CONNECTING;
+        }
+        return ESP_OK;
 
     default:
         ESP_LOGW(TAG, "event %d not handled", event);
@@ -177,8 +374,10 @@ esp_err_t wifi_handler_init(wifi_manager_t* mgr) {
         return ESP_ERR_NO_MEM;
     }
 
-    s_handler->mgr   = mgr;
-    s_handler->state = WIFI_FSM_STATE_POWER_OFF;
+    s_handler->mgr         = mgr;
+    s_handler->state       = WIFI_FSM_STATE_POWER_OFF;
+    s_handler->driver_task = NULL;
+    s_handler->wifi_inited = false;
     return ESP_OK;
 }
 

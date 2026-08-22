@@ -16,10 +16,12 @@ extern "C" {
 
 typedef enum {
     //access point event
-    WIFI_SRV_EVENT_START,           // start with ap mode (default)
-    WIFI_SRV_EVENT_STOP,            // stop wifi
-    WIFI_SRV_EVENT_CONNECT,         // only spend for STA mode (to connect with router)
-    WIFI_SRV_EVENT_DISCONNECT,      // (STA/ Ap) esp disconnect with paired device.
+    WIFI_SRV_AP_EVENT_START,
+    WIFI_SRV_STA_EVENT_START,
+    
+    WIFI_SRV_EVENT_STOP,
+    WIFI_SRV_EVENT_CONNECT,
+    WIFI_SRV_EVENT_DISCONNECT,
 
     //station event
     WIFI_SRV_EVENT_STA_STARTED,     /* Driver started, ready for connect     */
@@ -65,6 +67,18 @@ esp_err_t wifi_srv_start(void);
  * @return ESP_OK on success, ESP_ERR_NO_MEM if queue is full.
  */
 esp_err_t wifi_srv_post_event(wifi_srv_event_t event, void* data);
+
+/**
+ * @brief Switch the wifi driver to the given mode (AP or STA).
+ *
+ * Argument-driven: the caller passes the target mode. If the driver is
+ * currently running it is stopped first, then the manager mode is updated
+ * and the matching START event is posted. Non-blocking.
+ *
+ * @param mode  Target mode: WIFI_MODE_AP or WIFI_MODE_STA.
+ * @return ESP_OK on success, error code otherwise.
+ */
+esp_err_t wifi_srv_switch_mode(wifi_mode_t mode);
 
 /**
  * @brief Stop the dispatcher task.
