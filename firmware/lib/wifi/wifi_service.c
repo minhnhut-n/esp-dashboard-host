@@ -2,16 +2,6 @@
  * file name: wifi_service.c
  * brief: async wifi service - unified queue + dispatcher task.
  * author: minhnhut.n
- *
- *                     External Apps / System Events
- *                                  |
- *                                  v (Post command / event)
- *                      wifi_srv.unifiedQueue
- *                                  |
- *                                  v xQueueReceive (portMAX_DELAY)
- *                          wifi_service_task  <-- Only dispatches
- *                                  |
- *                                  v wifi_handler_process_event(mgr, event, data)
  */
 
 #include <stdlib.h>
@@ -39,14 +29,10 @@ typedef struct {
     QueueHandle_t unified_queue;
     TaskHandle_t   task_handle;
     bool           started;
-    wifi_manager_t* mgr;   /* single manager from main (mode + creds) */
+    wifi_manager_t* mgr;
 } wifi_srv_ctx_t;
 
-
-/**
- * Define a static as internal unique varable
- * (intentional arhitecture design)
- */
+// singleton
 static wifi_srv_ctx_t wifi_srv_ctx = {
     .unified_queue = NULL,
     .task_handle   = NULL,
@@ -59,12 +45,6 @@ static void wifi_service_task(void* arg) {
     (void)arg; //suppress unused parameter warning
 
     ESP_LOGI(TAG, "wifi_service_task started");
-
-    /**
-     * the behavior of module totally depend on current context -> state machine
-     * se'mantic meaning, this will run forever
-     * while(1) mean make a loop with the condition
-     */
     for (;;) {
         wifi_srv_msg_t msg;
         BaseType_t ret = xQueueReceive(wifi_srv_ctx.unified_queue, &msg, portMAX_DELAY);
@@ -80,7 +60,7 @@ static void wifi_service_task(void* arg) {
 }
 
 /* create a queue for internal message communication in wifi_service
-automatically trigger init in wifi_handler when the configuration is set*/
+automatically trigger init in wifi_handler when the configuration is set */
 esp_err_t wifi_srv_init(wifi_manager_t* mgr) {
     if (mgr == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -121,8 +101,6 @@ esp_err_t wifi_srv_start(void) {
     return ESP_OK;
 }
 
-/* for the case, application or service want to notify event to wifi_service
-it will use this function for public event to "unified_queue" */
 esp_err_t wifi_srv_post_event(wifi_srv_event_t event, void* data) {
     if (wifi_srv_ctx.unified_queue == NULL) {
         return ESP_ERR_INVALID_STATE;
@@ -146,9 +124,7 @@ esp_err_t wifi_srv_post_event(wifi_srv_event_t event, void* data) {
         msg.data = creds; // data is pointed to heap mem -> free is needed.
     }
 
-    //internal queue
     BaseType_t ret = xQueueSend(wifi_srv_ctx.unified_queue, &msg, 0);
-    // when it fail
     if (ret != pdTRUE) {
         ESP_LOGW(TAG, "unified queue full, dropping event %d", event);
         if (event == WIFI_SRV_EVENT_CONNECT) {
@@ -168,17 +144,17 @@ esp_err_t wifi_srv_switch_mode(wifi_mode_t mode) {
         ESP_LOGE(TAG, "call wifi_srv_init first");
         return ESP_ERR_INVALID_STATE;
     }
+
+    if (mode == wifi_manager_get_mode(wifi_srv_ctx.mgr)) {
+        ESP_LOGI(TAG, "already in mode %d", mode);
+        return ESP_OK;
+    }
+
     if (mode != WIFI_MODE_AP && mode != WIFI_MODE_STA) {
         ESP_LOGE(TAG, "unsupported mode %d", mode);
         return ESP_ERR_INVALID_ARG;
     }
 
-    /* The driver task is the single serialization point: it stops any
-       currently-running mode and applies the new mode/config atomically
-       in its own context. So we only update the manager and post a single
-       START - no separate STOP event (avoids cross-task race where
-       set_mode/set_config collide with a pending wifi teardown). */
-    if (mode == wifi_manager_get_mode(wifi_srv_ctx.mgr)) return ESP_OK;
     wifi_manager_set_mode(wifi_srv_ctx.mgr, mode);
 
     wifi_srv_event_t start_event = (mode == WIFI_MODE_AP)

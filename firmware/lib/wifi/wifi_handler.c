@@ -108,12 +108,11 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
-/* Runs in its own task so wifi_service_task is never blocked by the long
-   esp_wifi_init()/esp_wifi_start() sequence.
-   arg = wifi_manager_t* : the single manager from main -> mode + creds
-   are read through the manager API (single source of truth). */
 static void wifi_start_with_mode(void* arg) {
+    // type case with manager for this task
     wifi_manager_t* mgr = (wifi_manager_t*)arg;
+    
+    // manager is not init
     if (mgr == NULL) {
         ESP_LOGE(TAG, "driver task: manager is NULL");
         s_handler->state = WIFI_FSM_STATE_POWER_OFF;
@@ -125,9 +124,6 @@ static void wifi_start_with_mode(void* arg) {
     wifi_mode_t mode = wifi_manager_get_mode(mgr);
     esp_err_t err = ESP_OK;
 
-    /* One-time init: netif, event loop, esp_wifi_init, event handlers.
-       esp_wifi_init() may only be called once per boot - on mode switches
-       we skip this block and go straight to set_mode/set_config/start. */
     if (!s_handler->wifi_inited) {
         esp_netif_init();
 
@@ -140,9 +136,6 @@ static void wifi_start_with_mode(void* arg) {
             return;
         }
 
-        /* Create both netifs up front so switching AP <-> STA later
-           does not need to re-create them (esp_wifi_set_mode requires
-           the matching netif to exist). */
         esp_netif_create_default_wifi_ap();
         esp_netif_create_default_wifi_sta();
 
@@ -164,10 +157,8 @@ static void wifi_start_with_mode(void* arg) {
         s_handler->wifi_inited = true;
     }
 
-    /* Atomic switch: if a previous mode is still running (e.g. AP -> STA),
-       stop it HERE in this same task BEFORE applying the new mode. This
-       avoids the race where set_mode/set_config collide with the async
-       wifi teardown of esp_wifi_stop() -> ESP_ERR_WIFI_MODE. */
+    // state machine monitor
+    /* is_running -> stop -> restart with another mode */
     if (s_handler->state != WIFI_FSM_STATE_POWER_OFF) {
         ESP_LOGI(TAG, "stopping current driver before switching mode");
         err = esp_wifi_stop();
@@ -187,7 +178,6 @@ static void wifi_start_with_mode(void* arg) {
 
     if (mode == WIFI_MODE_AP) 
     {
-        /* Build AP config from the manager credentials */
         wifi_config_t ap_config;
         memset(&ap_config, 0, sizeof(ap_config));
         snprintf((char*)ap_config.ap.ssid, sizeof(ap_config.ap.ssid), "%s",
@@ -200,8 +190,7 @@ static void wifi_start_with_mode(void* arg) {
         if (ap_config.ap.authmode == WIFI_AUTH_OPEN) {
             ap_config.ap.password[0] = '\0';
         } else {
-            snprintf((char*)ap_config.ap.password, sizeof(ap_config.ap.password), "%s",
-                     creds.pass);
+            snprintf((char*)ap_config.ap.password, sizeof(ap_config.ap.password), "%s", creds.pass);
         }
 
         err = esp_wifi_set_mode(WIFI_MODE_AP);
@@ -212,10 +201,7 @@ static void wifi_start_with_mode(void* arg) {
             vTaskDelete(NULL);
             return;
         }
-        /* NOTE: esp_wifi_set_config() takes wifi_interface_t (WIFI_IF_AP=1),
-           NOT wifi_mode_t (WIFI_MODE_AP=2). Passing the mode value made the
-           internal switch fall into the STA branch on AP start - and vice
-           versa - producing ESP_ERR_WIFI_MODE after a mode switch. */
+
         err = esp_wifi_set_config(WIFI_IF_AP, &ap_config);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "esp_wifi_set_config failed: %s", esp_err_to_name(err));
@@ -241,10 +227,8 @@ static void wifi_start_with_mode(void* arg) {
         /* Build STA config from the manager credentials */
         wifi_config_t sta_config;
         memset(&sta_config, 0, sizeof(sta_config));
-        snprintf((char*)sta_config.sta.ssid, sizeof(sta_config.sta.ssid), "%s",
-                 creds.ssid);
-        snprintf((char*)sta_config.sta.password, sizeof(sta_config.sta.password), "%s",
-                 creds.pass);
+        snprintf((char*)sta_config.sta.ssid, sizeof(sta_config.sta.ssid), "%s", creds.ssid);
+        snprintf((char*)sta_config.sta.password, sizeof(sta_config.sta.password), "%s", creds.pass);
         sta_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
 
         ESP_LOGI(TAG, "STA: set_mode");
@@ -290,8 +274,7 @@ static void wifi_start_with_mode(void* arg) {
     vTaskDelete(NULL);
 }
 
-/* Non-blocking: spawn the driver task with the manager as arg and return
-   immediately so wifi_service_task can keep draining the unified queue. */
+// create task on event
 static esp_err_t wifi_handler_start_driver(void) {
     if (s_handler->driver_task != NULL) {
         ESP_LOGW(TAG, "driver task already running");
@@ -316,9 +299,6 @@ esp_err_t wifi_handler_process_event(wifi_srv_event_t event, void* data) {
 
     case WIFI_SRV_AP_EVENT_START:
     case WIFI_SRV_STA_EVENT_START:
-        /* The driver task is the single serialization point: it stops any
-           currently-running mode first, then applies the new mode/config.
-           The driver_task handle guards against concurrent driver tasks. */
         return wifi_handler_start_driver();
 
     case WIFI_SRV_EVENT_STOP:
