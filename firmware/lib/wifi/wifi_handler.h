@@ -30,6 +30,10 @@ esp_err_t wifi_handler_process_event(wifi_srv_event_t event, void* data);
 wifi_fsm_state_t wifi_handler_get_state(void);
 esp_err_t wifi_handler_deinit(void);
 
+// asychonize nvs flash handler
+esp_err_t wifi_flash_store_creds(void);
+esp_err_t wifi_flash_load_creds(void);
+
 #ifdef __cplusplus
 }
 #endif

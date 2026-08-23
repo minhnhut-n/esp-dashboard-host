@@ -25,16 +25,20 @@
 #include "esp_log.h"
 #include "wifi_handler.h"
 #include "wifi_manager.h"
+#include "storage_manager.h"
 
 static const char* TAG = "wifi_handler";
 
 #define WIFI_HANDLER_DEFAULT_AP_MAXCON 4
 #define WIFI_HANDLER_DEFAULT_AP_CHANNEL 1
-/* 8KB: the switch sequence calls esp_wifi_stop/set_mode/set_config/start
-   + esp_wifi_connect, plus large local structs (wifi_config_t etc.).
-   4KB was too small and caused a silent stack overflow -> task death. */
+
+// need 8kb for large data struct
 #define WIFI_HANDLER_DRIVER_TASK_STACK 8192
 #define WIFI_HANDLER_DRIVER_TASK_PRIO  5
+
+// 4kb for data storage asynchonous
+#define WIFI_HANDLER_FLASH_TASK_STACK 4096
+#define WIFI_HANDLER_FLASH_TASK_PRIO  4
 
 typedef struct wifi_handler {
     wifi_manager_t* mgr;
@@ -274,6 +278,71 @@ static void wifi_start_with_mode(void* arg) {
     vTaskDelete(NULL);
 }
 
+/* ------------------- Flash credential tasks (non-blocking) --------------- */
+static void wifi_flash_store_task(void* arg) {
+    wifi_credentials_t* creds = (wifi_credentials_t*)arg;
+    if (creds == NULL) {
+        ESP_LOGE(TAG, "flash store: creds is NULL");
+        vTaskDelete(NULL);
+        return;
+    }
+
+    esp_err_t err = storage_manager_save_wifi_creds((const char*)creds->ssid,
+                                                    (const char*)creds->pass);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "flash store failed: %s", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "flash store success (ssid=%s)", creds->ssid);
+    }
+
+    free(creds);       /* heap copy owned by this task */
+    vTaskDelete(NULL); /* task ends itself */
+}
+
+static void wifi_flash_load_task(void* arg) {
+    (void)arg;
+
+    char ssid[MAX_SSID_LEN] = {0};
+    char pass[MAX_PASS_LEN] = {0};
+
+    esp_err_t err = storage_manager_load_wifi_creds(ssid, sizeof(ssid),
+                                                    pass, sizeof(pass));
+    if (err != ESP_OK) {
+        if (err == ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGW(TAG, "no stored credentials found in flash");
+        } else {
+            ESP_LOGE(TAG, "flash load failed: %s", esp_err_to_name(err));
+        }
+        vTaskDelete(NULL);
+        return;
+    }
+
+    if (s_handler != NULL && s_handler->mgr != NULL) {
+        wifi_manager_set_credentials(s_handler->mgr,
+                                     (uint8_t*)ssid,
+                                     (uint8_t*)pass);
+        ESP_LOGI(TAG, "flash load success (ssid=%s)", ssid);
+    }
+
+    vTaskDelete(NULL); /* task ends itself */
+}
+
+static esp_err_t wifi_handler_spawn_flash_task(TaskFunction_t task_fn,
+                                               void* arg) {
+    TaskHandle_t task = NULL;
+    BaseType_t ret = xTaskCreate(task_fn, "wifi_flash_task",
+                                 WIFI_HANDLER_FLASH_TASK_STACK, arg,
+                                 WIFI_HANDLER_FLASH_TASK_PRIO, &task);
+    if (ret != pdPASS) {
+        ESP_LOGE(TAG, "failed to create wifi_flash_task");
+        /* caller must free arg if heap-owned (e.g. creds) */
+        return ESP_ERR_NO_MEM;
+    }
+    return ESP_OK;
+}
+
+/* ------------------- Driver task (existing) ------------------------------ */
+
 // create task on event
 static esp_err_t wifi_handler_start_driver(void) {
     if (s_handler->driver_task != NULL) {
@@ -335,6 +404,21 @@ esp_err_t wifi_handler_process_event(wifi_srv_event_t event, void* data) {
         }
         return ESP_OK;
 
+
+    case CREDENTIAL_STORE_EVENT:
+        if (data == NULL) {
+            return ESP_ERR_INVALID_ARG;
+        }
+        esp_err_t spawn_err = wifi_handler_spawn_flash_task(wifi_flash_store_task, data);
+        if (spawn_err != ESP_OK) {
+            /* task spawn failed: release the heap copy we own */
+            free(data);
+        }
+        return spawn_err;
+
+    case CREDENTIAL_LOAD_EVENT:
+        return wifi_handler_spawn_flash_task(wifi_flash_load_task, NULL);
+
     default:
         ESP_LOGW(TAG, "event %d not handled", event);
         return ESP_OK;
@@ -376,4 +460,31 @@ esp_err_t wifi_handler_deinit(void) {
     free(s_handler);
     s_handler = NULL;
     return ESP_OK;
+}
+// public api
+esp_err_t wifi_flash_store_creds(void) {
+    if (s_handler == NULL || s_handler->mgr == NULL) {
+        ESP_LOGE(TAG, "wifi handler not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    wifi_credentials_t creds = wifi_manager_get_credentials(s_handler->mgr);
+
+    wifi_credentials_t* heap_creds = malloc(sizeof(wifi_credentials_t));
+    if (heap_creds == NULL) {
+        ESP_LOGE(TAG, "flash store: malloc failed");
+        return ESP_ERR_NO_MEM;
+    }
+    memcpy(heap_creds, &creds, sizeof(wifi_credentials_t));
+
+    return wifi_handler_spawn_flash_task(wifi_flash_store_task, heap_creds);
+}
+
+esp_err_t wifi_flash_load_creds(void) {
+    if (s_handler == NULL) {
+        ESP_LOGE(TAG, "wifi handler not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    return wifi_handler_spawn_flash_task(wifi_flash_load_task, NULL);
 }

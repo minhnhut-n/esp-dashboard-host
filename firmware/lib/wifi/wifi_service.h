@@ -31,6 +31,10 @@ typedef enum {
 
     //timeout connect with wifi (station mode)
     WIFI_SRV_EVENT_CONNECT_TIMEOUT, /* No IP within timeout window           */
+
+    //flash credential store/load events (async, non-blocking)
+    CREDENTIAL_STORE_EVENT,         /* Save wifi creds to NVS flash          */
+    CREDENTIAL_LOAD_EVENT,          /* Load wifi creds from NVS flash        */
 } wifi_srv_event_t;
 
 /**

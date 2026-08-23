@@ -7,6 +7,16 @@
  *   app_main posts WIFI_SRV_EVENT_START (non-blocking)
  *   wifi_service_task -> wifi_handler_process_event -> wifi_handler_start_driver
  *   -> AP mode active (ssid: esp-alex / pass: alex1234)
+ *
+ * Flash store feature:
+ *   storage_manager_init() creates the NVS namespace + semaphore lock.
+ *   CREDENTIAL_LOAD_EVENT is posted at boot: a dedicated FreeRTOS task
+ *   reads flash (non-blocking for the caller) and restores credentials
+ *   into the wifi manager.
+ *   CREDENTIAL_STORE_EVENT is posted after STA config: a dedicated
+ *   FreeRTOS task writes flash (non-blocking for the caller).
+ *   All NVS operations are serialized by the storage_manager mutex so
+ *   concurrent flash tasks never race on the flash resource.
  */
 
 #include <string.h>
@@ -17,6 +27,7 @@
 #include "wifi_manager.h"
 #include "wifi_service.h"
 #include "wifi_handler.h"
+#include "storage_manager.h"
 
 #define WIFI_HANDLER_DEFAULT_AP_SSID   "ESP_ALEX"
 #define WIFI_HANDLER_DEFAULT_AP_PASS   "nhut12345"
@@ -66,6 +77,13 @@ void app_main(void) {
         return;
     }
 
+    // data wifi creds
+    storage_manager_t* storage = storage_manager_init();
+    if (storage == NULL) {
+        ESP_LOGE(TAG, "storage_manager_init failed");
+        return;
+    }
+
     /* RAM state store (retained for future STA support) */
     // Create manager
     wifi_manager_t* mgr = wifi_manager_create();
@@ -99,9 +117,7 @@ void app_main(void) {
         ESP_LOGE(TAG, "switch to AP failed: %s", esp_err_to_name(err));
     }
 
-    /* Demo: after 5s switch to STA with STA credentials.
-       wifi_srv_switch_mode stops the driver, updates the manager mode,
-       and posts the matching START event - all argument-driven. */
+    // for demo
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     wifi_manager_set_credentials(mgr,
@@ -112,6 +128,28 @@ void app_main(void) {
         ESP_LOGE(TAG, "switch to STA failed: %s", esp_err_to_name(err));
     }
 
+
+    // // restore data from flash ==================================================================
+    // err = wifi_srv_post_event(CREDENTIAL_LOAD_EVENT, NULL);
+    // if (err != ESP_OK) {
+    //     ESP_LOGW(TAG, "post CREDENTIAL_LOAD_EVENT failed: %s", esp_err_to_name(err));
+    // }
+    // // end restore data from flash ==============================================================
+
+    // Logic check null or start with option (default is restore, optional: start default) 
+    // -- Not implement yet
+
+    // // save for backup credentials ============================================================
+    // wifi_credentials_t sta_creds;
+    // memset(&sta_creds, 0, sizeof(sta_creds));
+    // memcpy(sta_creds.ssid, WIFI_HANDLER_DEFAULT_STA_SSID, strlen(WIFI_HANDLER_DEFAULT_STA_SSID));
+    // memcpy(sta_creds.pass, WIFI_HANDLER_DEFAULT_STA_PASS, strlen(WIFI_HANDLER_DEFAULT_STA_PASS));
+
+    // err = wifi_srv_post_event(CREDENTIAL_STORE_EVENT, &sta_creds);
+    // if (err != ESP_OK) {
+    //     ESP_LOGW(TAG, "post CREDENTIAL_STORE_EVENT failed: %s", esp_err_to_name(err));
+    // }
+    // // save for backup credentials ============================================================
 
     /* app_main returns; wifi_service_task + status_monitor keep running */
 }

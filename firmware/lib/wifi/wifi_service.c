@@ -12,6 +12,7 @@
 #include "esp_log.h"
 #include "wifi_service.h"
 #include "wifi_handler.h"
+#include "storage_manager.h"
 
 static const char* TAG = "wifi_srv";
 
@@ -111,7 +112,7 @@ esp_err_t wifi_srv_post_event(wifi_srv_event_t event, void* data) {
         .data  = data,
     };
 
-    if (event == WIFI_SRV_EVENT_CONNECT) {
+    if (event == WIFI_SRV_EVENT_CONNECT || event == CREDENTIAL_STORE_EVENT) {
         if (data == NULL) {
             return ESP_ERR_INVALID_ARG;
         }
@@ -127,7 +128,7 @@ esp_err_t wifi_srv_post_event(wifi_srv_event_t event, void* data) {
     BaseType_t ret = xQueueSend(wifi_srv_ctx.unified_queue, &msg, 0);
     if (ret != pdTRUE) {
         ESP_LOGW(TAG, "unified queue full, dropping event %d", event);
-        if (event == WIFI_SRV_EVENT_CONNECT) {
+        if (event == WIFI_SRV_EVENT_CONNECT || event == CREDENTIAL_STORE_EVENT) {
             free(msg.data);
         }
         return ESP_ERR_NO_MEM;
@@ -184,7 +185,8 @@ esp_err_t wifi_srv_deinit(void) {
     if (wifi_srv_ctx.unified_queue != NULL) {
         wifi_srv_msg_t msg;
         while (xQueueReceive(wifi_srv_ctx.unified_queue, &msg, 0) == pdTRUE) {
-            if (msg.event == WIFI_SRV_EVENT_CONNECT && msg.data != NULL) {
+            if ((msg.event == WIFI_SRV_EVENT_CONNECT || msg.event == CREDENTIAL_STORE_EVENT)
+                && msg.data != NULL) {
                 free(msg.data);
             }
         }
