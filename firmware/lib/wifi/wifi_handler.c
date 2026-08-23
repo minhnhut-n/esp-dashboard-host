@@ -26,6 +26,7 @@
 #include "wifi_handler.h"
 #include "wifi_manager.h"
 #include "storage_manager.h"
+#include "event_bus.h"
 
 static const char* TAG = "wifi_handler";
 
@@ -71,6 +72,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
         case WIFI_EVENT_STA_CONNECTED:
             handler->state = WIFI_FSM_STATE_CONNECTED;
             ESP_LOGI(TAG, "STA connected");
+            event_bus_post(WIFI_STA_CONNECTED, NULL);
             break;
         case WIFI_EVENT_STA_DISCONNECTED:
             if (event_data != NULL) {
@@ -80,7 +82,8 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
             } else {
                 ESP_LOGI(TAG, "STA disconnected");
             }
-            handler->state = WIFI_FSM_STATE_CONNECTING;
+            handler->state = WIFI_FSM_STATE_DISCONNECTED;
+            event_bus_post(WIFI_DISCONNECT, NULL);
             break;
         case WIFI_EVENT_AP_STACONNECTED:
             if (event_data != NULL) {
@@ -90,6 +93,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
             } else {
                 ESP_LOGI(TAG, "station connected to AP");
             }
+            event_bus_post(WIFI_AP_CONNECTED, NULL);
             break;
         case WIFI_EVENT_AP_STADISCONNECTED:
             if (event_data != NULL) {
@@ -108,6 +112,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
             ip_event_got_ip_t* ip_info = (ip_event_got_ip_t*)event_data;
             handler->state = WIFI_FSM_STATE_CONNECTED;
             ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&ip_info->ip_info.ip));
+            event_bus_post(WIFI_GOT_IP, NULL);
         }
     }
 }

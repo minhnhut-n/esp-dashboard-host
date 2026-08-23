@@ -28,6 +28,7 @@
 #include "wifi_service.h"
 #include "wifi_handler.h"
 #include "storage_manager.h"
+#include "event_bus.h"
 
 #define WIFI_HANDLER_DEFAULT_AP_SSID   "ESP_ALEX"
 #define WIFI_HANDLER_DEFAULT_AP_PASS   "nhut12345"
@@ -74,6 +75,15 @@ void app_main(void) {
     }
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "nvs_flash_init failed: %s", esp_err_to_name(err));
+        return;
+    }
+
+    /* Initialize the esp_event based event bus:
+       creates (or reuses) the default event loop and registers the
+       WIFI_APP_EVENT / HTTP_APP_EVENT dispatcher. */
+    err = event_bus_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "event_bus_init failed: %s", esp_err_to_name(err));
         return;
     }
 

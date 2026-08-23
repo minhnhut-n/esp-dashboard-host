@@ -19,6 +19,7 @@ typedef enum {
     WIFI_FSM_STATE_POWER_OFF,   /* Driver not initialized                */
     WIFI_FSM_STATE_IDLE,        /* Driver initialized, not connected     */
     WIFI_FSM_STATE_RUNNING,
+    WIFI_FSM_STATE_DISCONNECTED,
     WIFI_FSM_STATE_CONNECTING,  /* esp_wifi_connect issued, awaiting link */
     WIFI_FSM_STATE_CONNECTED,   /* L2 connected, awaiting IP (or ready)  */
 } wifi_fsm_state_t;
