@@ -32,6 +32,7 @@ typedef enum {
     HTTP_APP_EVENT_REQ_CHANGE_WF_MODE,  /* change wifi mode            */
     HTTP_APP_EVENT_CONTROL_DEVICE,      /* control a device            */
     HTTP_APP_EVENT_GET_DATA,            /* request data                */
+    HTTP_APP_EVENT_EXIT,                /* application exit request    */
 } http_app_event_id_t;
 
 /* ------------------- Legacy logical event types ------------ */
@@ -49,6 +50,7 @@ typedef enum {
     HTTP_REQ_CHANGE_WF_MODE,
     HTTP_CONTROL_DEV,
     HTTP_GET_DATA,
+    HTTP_EXIT,
 
     EVENT_BUS_MAX,   /* keep last: number of event types */
 } event_type_t;

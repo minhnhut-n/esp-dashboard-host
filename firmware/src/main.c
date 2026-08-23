@@ -29,6 +29,7 @@
 #include "wifi_handler.h"
 #include "storage_manager.h"
 #include "event_bus.h"
+#include "http_manager.h"
 
 #define WIFI_HANDLER_DEFAULT_AP_SSID   "ESP_ALEX"
 #define WIFI_HANDLER_DEFAULT_AP_PASS   "nhut12345"
@@ -115,6 +116,13 @@ void app_main(void) {
 
     /* Watch the FSM transitions */
     xTaskCreate(status_monitor_task, "status_monitor", 2048, NULL, 3, NULL);
+
+    /* HTTP server lifecycle: auto-starts when WiFi driver comes up */
+    err = http_manager_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "http_manager_init failed: %s", esp_err_to_name(err));
+        return;
+    }
 
     /* Seed the single manager with AP credentials, then start AP. */
     wifi_manager_set_credentials(mgr,

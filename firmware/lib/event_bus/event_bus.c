@@ -39,6 +39,7 @@ static void event_bus_map_to_base_id(event_type_t type, esp_event_base_t* base, 
     case HTTP_REQ_CHANGE_WF_MODE:  *base = HTTP_APP_EVENT; *id = HTTP_APP_EVENT_REQ_CHANGE_WF_MODE; break;
     case HTTP_CONTROL_DEV:         *base = HTTP_APP_EVENT; *id = HTTP_APP_EVENT_CONTROL_DEVICE;     break;
     case HTTP_GET_DATA:            *base = HTTP_APP_EVENT; *id = HTTP_APP_EVENT_GET_DATA;           break;
+    case HTTP_EXIT:                *base = HTTP_APP_EVENT; *id = HTTP_APP_EVENT_EXIT;               break;
 
     default:
         *base = NULL;
