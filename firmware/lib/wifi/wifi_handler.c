@@ -229,7 +229,7 @@ static void wifi_start_with_mode(void* arg) {
         }
         s_handler->state = WIFI_FSM_STATE_RUNNING;
         ESP_LOGI(TAG, "AP mode started (ssid=%s)", creds.ssid);
-
+        // event_bus_post(WIFI_AP_CONNECTED, NULL);
     } 
     else
     {

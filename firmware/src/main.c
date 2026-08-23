@@ -78,9 +78,7 @@ void app_main(void) {
         return;
     }
 
-    /* Initialize the esp_event based event bus:
-       creates (or reuses) the default event loop and registers the
-       WIFI_APP_EVENT / HTTP_APP_EVENT dispatcher. */
+    // event loop message
     err = event_bus_init();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "event_bus_init failed: %s", esp_err_to_name(err));
@@ -127,16 +125,16 @@ void app_main(void) {
         ESP_LOGE(TAG, "switch to AP failed: %s", esp_err_to_name(err));
     }
 
-    // for demo
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    // // for demo
+    // vTaskDelay(pdMS_TO_TICKS(1000));
 
-    wifi_manager_set_credentials(mgr,
-                                 (uint8_t*)WIFI_HANDLER_DEFAULT_STA_SSID,
-                                 (uint8_t*)WIFI_HANDLER_DEFAULT_STA_PASS);
-    err = wifi_srv_switch_mode(WIFI_MODE_STA);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "switch to STA failed: %s", esp_err_to_name(err));
-    }
+    // wifi_manager_set_credentials(mgr,
+    //                              (uint8_t*)WIFI_HANDLER_DEFAULT_STA_SSID,
+    //                              (uint8_t*)WIFI_HANDLER_DEFAULT_STA_PASS);
+    // err = wifi_srv_switch_mode(WIFI_MODE_STA);
+    // if (err != ESP_OK) {
+    //     ESP_LOGE(TAG, "switch to STA failed: %s", esp_err_to_name(err));
+    // }
 
 
     // // restore data from flash ==================================================================
