@@ -35,6 +35,7 @@ static void event_bus_map_to_base_id(event_type_t type, esp_event_base_t* base, 
     case WIFI_DISCONNECT:     *base = WIFI_APP_EVENT; *id = WIFI_APP_EVENT_DISCONNECT;     break;
 
     /* http / control events -> HTTP_APP_EVENT */
+    case HTTP_REQ_SWITCH_TO_STA:   *base = HTTP_APP_EVENT; *id = HTTP_APP_EVENT_REQ_SWITCH_TO_STA;  break;
     case HTTP_REQ_CHANGE_CREADS:   *base = HTTP_APP_EVENT; *id = HTTP_APP_EVENT_REQ_CHANGE_CREDS;   break;
     case HTTP_REQ_CHANGE_WF_MODE:  *base = HTTP_APP_EVENT; *id = HTTP_APP_EVENT_REQ_CHANGE_WF_MODE; break;
     case HTTP_CONTROL_DEV:         *base = HTTP_APP_EVENT; *id = HTTP_APP_EVENT_CONTROL_DEVICE;     break;

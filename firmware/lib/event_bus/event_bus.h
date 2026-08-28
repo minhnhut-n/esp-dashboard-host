@@ -28,6 +28,7 @@ typedef enum {
 } wifi_app_event_id_t;
 
 typedef enum {
+    HTTP_APP_EVENT_REQ_SWITCH_TO_STA,
     HTTP_APP_EVENT_REQ_CHANGE_CREDS,    /* change wifi credentials     */
     HTTP_APP_EVENT_REQ_CHANGE_WF_MODE,  /* change wifi mode            */
     HTTP_APP_EVENT_CONTROL_DEVICE,      /* control a device            */
@@ -46,6 +47,7 @@ typedef enum {
     WIFI_DISCONNECT,
 
     /* http / control events -> HTTP_APP_EVENT */
+    HTTP_REQ_SWITCH_TO_STA,
     HTTP_REQ_CHANGE_CREADS,
     HTTP_REQ_CHANGE_WF_MODE,
     HTTP_CONTROL_DEV,

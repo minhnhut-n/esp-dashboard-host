@@ -185,14 +185,14 @@ esp_err_t storage_manager_save_wifi_creds(const char* ssid, const char* pass) {
 
     /* write ssid first; if this fails nothing was stored */
     err = storage_manager_write(s_manager, NVS_WIFI_SSID_KEY,
-                                ssid, strlen(ssid) + 1);
+                                ssid, (size_t) NVS_SSID_SIZE);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "save ssid failed: %s", esp_err_to_name(err));
         return err;
     }
 
     err = storage_manager_write(s_manager, NVS_WIFI_PASS_KEY,
-                                pass, strlen(pass) + 1);
+                                pass, (size_t) NVS_PASS_SIZE);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "save pass failed: %s", esp_err_to_name(err));
         return err;
