@@ -44,6 +44,7 @@ static const char* fsm_state_name(wifi_fsm_state_t state) {
     case WIFI_FSM_STATE_POWER_OFF:  return "POWER_OFF";
     case WIFI_FSM_STATE_IDLE:       return "IDLE";
     case WIFI_FSM_STATE_RUNNING:    return "RUNNING";
+    case WIFI_FSM_STATE_DISCONNECTED: return "DISCONNECTED";
     case WIFI_FSM_STATE_CONNECTING: return "CONNECTING";
     case WIFI_FSM_STATE_CONNECTED:  return "CONNECTED";
     default:                        return "UNKNOWN";
@@ -145,15 +146,13 @@ void app_main(void) {
     // }
 
 
-    // // restore data from flash ==================================================================
     // err = wifi_srv_post_event(CREDENTIAL_LOAD_EVENT, NULL);
     // if (err != ESP_OK) {
     //     ESP_LOGW(TAG, "post CREDENTIAL_LOAD_EVENT failed: %s", esp_err_to_name(err));
     // }
-    // // end restore data from flash ==============================================================
 
-    // Logic check null or start with option (default is restore, optional: start default) 
-    // -- Not implement yet
+    /* Logic check null or start with option (default is restore, optional: start default)
+       -- Not implement yet */
 
     // // save for backup credentials ============================================================
     // wifi_credentials_t sta_creds;

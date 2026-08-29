@@ -28,6 +28,7 @@ extern "C" {
 #define HTTP_API_REBOOT     "/api/reboot"
 #define HTTP_API_RELAY      "/api/relay"
 #define HTTP_API_WIFI_CRED  "/api/wifi_cred"
+#define HTTP_API_WIFI_MODE  "/api/wifi_mode"
 #define HTTP_API_EXIT       "/api/exit"
 
 #define NVS_SSID_SIZE 32
@@ -48,6 +49,7 @@ esp_err_t json_post_reboot(httpd_req_t* req);
 esp_err_t json_post_relay(httpd_req_t* req);
 esp_err_t json_get_wifi_cred(httpd_req_t* req);
 esp_err_t json_post_wifi_cred(httpd_req_t* req);
+esp_err_t json_post_wifi_mode(httpd_req_t* req);
 esp_err_t json_post_exit(httpd_req_t* req);
 
 #ifdef __cplusplus

@@ -18,6 +18,7 @@
 
 #include "esp_log.h"
 #include <string.h>
+#include <stdint.h>
 
 #include "wifi_manager.h"
 #include "wifi_service.h"
@@ -29,6 +30,10 @@ static const char* TAG = "HTTP_SERVICE";
 esp_err_t http_service_save_wifi_creds(const char* ssid, const char* pass) {
     if (ssid == NULL || pass == NULL) {
         return ESP_ERR_INVALID_ARG;
+    }
+    esp_err_t mgr_err = wifi_srv_set_credentials(ssid, pass);
+    if (mgr_err != ESP_OK) {
+        ESP_LOGW(TAG, "update manager credentials failed: %s", esp_err_to_name(mgr_err));
     }
 
     /* clamp into the fixed-size credential bundle used by wifi_handler */
@@ -62,6 +67,18 @@ esp_err_t http_service_load_wifi_creds(char* ssid, size_t ssid_size,
     }
 
     return storage_manager_load_wifi_creds(ssid, ssid_size, pass, pass_size);
+}
+
+esp_err_t http_service_switch_wifi_mode(const char* payload) {
+    if (payload == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "switch wifi mode request (payload=%s)", payload);
+
+    /* Ownership of the heap-allocated compressed payload transfers to the
+       event bus -> wifi service subscriber, which frees it after unpacking. */
+    return event_bus_post(HTTP_REQ_CHANGE_WF_MODE, (void*)payload);
 }
 
 esp_err_t http_service_control_device(int32_t relay, bool state) {

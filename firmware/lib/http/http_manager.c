@@ -24,7 +24,7 @@
 
 static const char* TAG = "HTTP_MANAGER";
 
-#define HTTP_MANAGER_MAX_URI_HANDLERS 16
+#define HTTP_MANAGER_MAX_URI_HANDLERS 20
 
 /* singleton server instance */
 static httpd_handle_t s_http_server = NULL;
@@ -46,6 +46,8 @@ static const httpd_uri_t uri_s[] = {
     {.uri = HTTP_API_WIFI_CRED,  .method = HTTP_GET,     .handler = json_get_wifi_cred},
     {.uri = HTTP_API_WIFI_CRED,  .method = HTTP_POST,    .handler = json_post_wifi_cred},
     {.uri = HTTP_API_WIFI_CRED,  .method = HTTP_OPTIONS, .handler = json_options_handler},
+    {.uri = HTTP_API_WIFI_MODE,  .method = HTTP_POST,    .handler = json_post_wifi_mode},
+    {.uri = HTTP_API_WIFI_MODE,  .method = HTTP_OPTIONS, .handler = json_options_handler},
     {.uri = HTTP_API_EXIT,       .method = HTTP_POST,    .handler = json_post_exit},
     {.uri = HTTP_API_EXIT,       .method = HTTP_OPTIONS, .handler = json_options_handler},
 };

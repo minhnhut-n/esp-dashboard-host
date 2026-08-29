@@ -6,6 +6,8 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdint.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -13,6 +15,8 @@
 #include "wifi_service.h"
 #include "wifi_handler.h"
 #include "storage_manager.h"
+#include "event_bus.h"
+#include "comp_decomp_data.h"
 
 static const char* TAG = "wifi_srv";
 
@@ -60,6 +64,58 @@ static void wifi_service_task(void* arg) {
     }
 }
 
+static void wifi_srv_mode_change_handler(esp_event_base_t base, int32_t id, void* data) {
+    (void)base;
+    (void)id;
+
+    if (data == NULL) {
+        ESP_LOGW(TAG, "mode change event without payload");
+        return;
+    }
+
+    char* payload = (char*)data;
+
+    char mode_str[8] = {0};
+    char ssid[MAX_SSID_LEN] = {0};
+    char pass[MAX_PASS_LEN] = {0};
+    cmpds_decompress_get(payload, "mode", mode_str, sizeof(mode_str));
+    cmpds_decompress_get(payload, "ssid", ssid, sizeof(ssid));
+    cmpds_decompress_get(payload, "pass", pass, sizeof(pass));
+    free(payload);
+
+    wifi_mode_t mode;
+    if (strcmp(mode_str, "AP") == 0) {
+        mode = WIFI_MODE_AP;
+    } else if (strcmp(mode_str, "STA") == 0) {
+        mode = WIFI_MODE_STA;
+    } else {
+        ESP_LOGW(TAG, "unsupported mode '%s'", mode_str);
+        return;
+    }
+    
+    if (ssid[0] != '\0' && pass[0] != '\0') {
+        esp_err_t creds_err = wifi_srv_set_credentials(ssid, pass);
+        if (creds_err != ESP_OK) {
+            ESP_LOGW(TAG, "failed to set credentials: %s", esp_err_to_name(creds_err));
+        }
+
+        wifi_credentials_t creds;
+        memset(&creds, 0, sizeof(creds));
+        snprintf((char*)creds.ssid, sizeof(creds.ssid), "%s", ssid);
+        snprintf((char*)creds.pass, sizeof(creds.pass), "%s", pass);
+        esp_err_t store_err = wifi_srv_post_event(CREDENTIAL_STORE_EVENT, &creds);
+        if (store_err != ESP_OK) {
+            ESP_LOGW(TAG, "persist creds failed: %s", esp_err_to_name(store_err));
+        }
+    }
+
+    ESP_LOGI(TAG, "switching wifi mode to %d", (int)mode);
+    esp_err_t err = wifi_srv_switch_mode(mode);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "wifi_srv_switch_mode failed: %s", esp_err_to_name(err));
+    }
+}
+
 /* create a queue for internal message communication in wifi_service
 automatically trigger init in wifi_handler when the configuration is set */
 esp_err_t wifi_srv_init(wifi_manager_t* mgr) {
@@ -74,7 +130,13 @@ esp_err_t wifi_srv_init(wifi_manager_t* mgr) {
             return ESP_ERR_NO_MEM;
         }
     }
-    wifi_srv_ctx.mgr = mgr;   // keep the manager for switch_mode
+    wifi_srv_ctx.mgr = mgr;
+
+    // bridge http and wifi
+    esp_err_t sub_err = event_bus_subscribe(HTTP_REQ_CHANGE_WF_MODE, wifi_srv_mode_change_handler);
+    if (sub_err != ESP_OK) {
+        ESP_LOGW(TAG, "subscribe HTTP_REQ_CHANGE_WF_MODE failed: %s", esp_err_to_name(sub_err));
+    }
 
     return wifi_handler_init(mgr);
 }
@@ -112,7 +174,16 @@ esp_err_t wifi_srv_post_event(wifi_srv_event_t event, void* data) {
         .data  = data,
     };
 
-    if (event == WIFI_SRV_EVENT_CONNECT || event == CREDENTIAL_STORE_EVENT) {
+    /* Events that can carry a heap-allocated payload get an owned heap copy so
+       the caller's buffer stays valid until the wifi task consumes it. START
+       events copy creds when the caller provides them; NULL data is untouched. */
+    bool payload_copy =
+        (event == WIFI_SRV_EVENT_CONNECT ||
+         event == CREDENTIAL_STORE_EVENT ||
+         ((event == WIFI_SRV_AP_EVENT_START || event == WIFI_SRV_STA_EVENT_START)
+          && data != NULL));
+
+    if (payload_copy) {
         if (data == NULL) {
             return ESP_ERR_INVALID_ARG;
         }
@@ -128,7 +199,7 @@ esp_err_t wifi_srv_post_event(wifi_srv_event_t event, void* data) {
     BaseType_t ret = xQueueSend(wifi_srv_ctx.unified_queue, &msg, 0);
     if (ret != pdTRUE) {
         ESP_LOGW(TAG, "unified queue full, dropping event %d", event);
-        if (event == WIFI_SRV_EVENT_CONNECT || event == CREDENTIAL_STORE_EVENT) {
+        if (payload_copy) {
             free(msg.data);
         }
         return ESP_ERR_NO_MEM;
@@ -138,6 +209,24 @@ esp_err_t wifi_srv_post_event(wifi_srv_event_t event, void* data) {
     // free/ deallocation moved to "wifi_handler_update_credentials()" under it data is used.
 
     return ESP_OK;
+}
+
+esp_err_t wifi_srv_set_credentials(const char* ssid, const char* pass) {
+    if (wifi_srv_ctx.mgr == NULL || ssid == NULL || pass == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    wifi_credentials_t padded;
+    memset(&padded, 0, sizeof(padded));
+    snprintf((char*)padded.ssid, sizeof(padded.ssid), "%s", ssid);
+    snprintf((char*)padded.pass, sizeof(padded.pass), "%s", pass);
+
+    esp_err_t err = wifi_manager_set_credentials(wifi_srv_ctx.mgr,
+                                                 padded.ssid, padded.pass);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "update manager credentials failed: %s", esp_err_to_name(err));
+    }
+    return err;
 }
 
 esp_err_t wifi_srv_switch_mode(wifi_mode_t mode) {
@@ -164,6 +253,29 @@ esp_err_t wifi_srv_switch_mode(wifi_mode_t mode) {
     return wifi_srv_post_event(start_event, NULL);
 }
 
+esp_err_t wifi_srv_switch_mode_with_creds(wifi_mode_t mode, wifi_credentials_t* creds) {
+    if (wifi_srv_ctx.unified_queue == NULL || wifi_srv_ctx.mgr == NULL) {
+        ESP_LOGE(TAG, "call wifi_srv_init first");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (mode != WIFI_MODE_AP && mode != WIFI_MODE_STA) {
+        ESP_LOGE(TAG, "unsupported mode %d", mode);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (creds != NULL) {
+        ESP_LOGI(TAG, "switch mode %d with creds ssid=%s", (int)mode, creds->ssid);
+        esp_err_t mgr_err = wifi_manager_set_credentials(wifi_srv_ctx.mgr, creds->ssid, creds->pass);
+        if (mgr_err != ESP_OK) {
+            ESP_LOGE(TAG, "set credentials failed: %s", esp_err_to_name(mgr_err));
+            return mgr_err;
+        }
+    }
+
+    return wifi_srv_switch_mode(mode);
+}
+
 esp_err_t wifi_srv_stop(void) {
     if (wifi_srv_ctx.task_handle == NULL) {
         return ESP_OK;
@@ -185,8 +297,13 @@ esp_err_t wifi_srv_deinit(void) {
     if (wifi_srv_ctx.unified_queue != NULL) {
         wifi_srv_msg_t msg;
         while (xQueueReceive(wifi_srv_ctx.unified_queue, &msg, 0) == pdTRUE) {
-            if ((msg.event == WIFI_SRV_EVENT_CONNECT || msg.event == CREDENTIAL_STORE_EVENT)
-                && msg.data != NULL) {
+            /* START events may carry a heap creds copy too (see post_event) */
+            bool owns_data =
+                (msg.event == WIFI_SRV_EVENT_CONNECT ||
+                 msg.event == CREDENTIAL_STORE_EVENT ||
+                 msg.event == WIFI_SRV_AP_EVENT_START ||
+                 msg.event == WIFI_SRV_STA_EVENT_START);
+            if (owns_data && msg.data != NULL) {
                 free(msg.data);
             }
         }
@@ -197,6 +314,8 @@ esp_err_t wifi_srv_deinit(void) {
         vQueueDelete(wifi_srv_ctx.unified_queue);
         wifi_srv_ctx.unified_queue = NULL;
     }
+
+    event_bus_unsubscribe(HTTP_REQ_CHANGE_WF_MODE);
 
     return wifi_handler_deinit();
 }

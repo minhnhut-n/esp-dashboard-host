@@ -13,6 +13,8 @@
 #include "http_handler.h"
 #include "http_service.h"
 
+#include "comp_decomp_data.h"
+
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_system.h"
@@ -46,6 +48,24 @@ esp_err_t json_response_https(httpd_req_t* req, cJSON* root) {
 esp_err_t json_options_handler(httpd_req_t* req) {
     set_cors_headers(req);
     return httpd_resp_sendstr(req, "");
+}
+
+/* Case-insensitive string equality, used for parsing mode strings. */
+static bool json_mode_is(const char* s, const char* want) {
+    if (s == NULL || want == NULL) {
+        return false;
+    }
+    while (*s && *want) {
+        char a = *s, b = *want;
+        if (a >= 'a' && a <= 'z') a -= 'a' - 'A';
+        if (b >= 'a' && b <= 'z') b -= 'a' - 'A';
+        if (a != b) {
+            return false;
+        }
+        s++;
+        want++;
+    }
+    return *s == '\0' && *want == '\0';
 }
 
 /* --------------------------- REST endpoints ------------------------------ */
@@ -190,6 +210,68 @@ esp_err_t json_get_wifi_cred(httpd_req_t* req) {
     return ret;
 }
 
+// POST /api/wifi_mode
+esp_err_t json_post_wifi_mode(httpd_req_t* req) {
+    ESP_LOGI(TAG, "POST %s", req->uri);
+
+    char buf[192];
+    int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
+    if (ret <= 0) {
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+
+    cJSON* root = cJSON_Parse(buf);
+    if (root == NULL) {
+        ESP_LOGE(TAG, "Failed to parse JSON");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    const char* mode = NULL;
+    const char* ssid = NULL;
+    const char* pass = NULL;
+    cJSON* mode_item = cJSON_GetObjectItem(root, "mode");
+    if (cJSON_IsString(mode_item)) mode = mode_item->valuestring;
+    cJSON* ssid_item = cJSON_GetObjectItem(root, "ssid");
+    if (cJSON_IsString(ssid_item)) ssid = ssid_item->valuestring;
+    cJSON* pass_item = cJSON_GetObjectItem(root, "pass");
+    if (cJSON_IsString(pass_item)) pass = pass_item->valuestring;
+
+    if (mode == NULL || !(json_mode_is(mode, "AP") || json_mode_is(mode, "STA"))) {
+        ESP_LOGE(TAG, "Invalid wifi mode: %s", mode ? mode : "(null)");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid mode (expected AP or STA)");
+        cJSON_Delete(root);
+        return ESP_FAIL;
+    }
+
+    char* payload = cmpds_compress("mode", mode,
+                                   "ssid", (ssid != NULL) ? ssid : "",
+                                   "pass", (pass != NULL) ? pass : "",
+                                   (const char*)NULL);
+    cJSON_Delete(root);
+    if (payload == NULL) {
+        ESP_LOGE(TAG, "compress wifi mode payload failed");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Pack payload failed");
+        return ESP_ERR_NO_MEM;
+    }
+
+    esp_err_t srv = http_service_switch_wifi_mode(payload);
+    if (srv != ESP_OK) {
+        ESP_LOGE(TAG, "switch wifi mode failed: %s", esp_err_to_name(srv));
+        free(payload);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to switch wifi mode");
+        return srv;
+    }
+
+    cJSON* resp = cJSON_CreateObject();
+    cJSON_AddStringToObject(resp, "status", "ok");
+    cJSON_AddStringToObject(resp, "mode", mode);
+    esp_err_t sta = json_response_https(req, resp);
+    cJSON_Delete(resp);
+    return sta;
+}
+
 // POST /api/reboot
 esp_err_t json_post_reboot(httpd_req_t* req) {
     cJSON* root = cJSON_CreateObject();
@@ -266,6 +348,8 @@ static const char* dashboard_html =
     "      <button onclick=\"call('/api/relay', 'POST', '{\"relay\":1,\"state\":true}')\" class=\"success\">Relay ON</button>"
     "      <button onclick=\"call('/api/relay', 'POST', '{\"relay\":1,\"state\":false}')\" class=\"danger\">Relay OFF</button>"
     "      <button onclick=\"call('/api/reboot', 'POST')\" class=\"danger\">Reboot</button>"
+    "      <button onclick=\"switchMode('AP')\" class=\"secondary\">AP Mode</button>"
+    "      <button onclick=\"switchMode('STA')\" class=\"success\">STA Mode</button>"
     "    </div>"
     "    <pre id=\"out\">Click a button to test the ESP REST API.</pre>"
     "    <script>"
@@ -324,6 +408,9 @@ static const char* dashboard_html =
     "      }"
     "      function sendExit() {"
     "        call('/api/exit', 'POST');"
+    "      }"
+    "      function switchMode(mode) {"
+    "        call('/api/wifi_mode', 'POST', JSON.stringify({mode: mode}));"
     "      }"
     "    </script>"
     "  </div>"

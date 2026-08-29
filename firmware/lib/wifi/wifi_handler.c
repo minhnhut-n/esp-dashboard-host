@@ -33,6 +33,11 @@ static const char* TAG = "wifi_handler";
 #define WIFI_HANDLER_DEFAULT_AP_MAXCON 4
 #define WIFI_HANDLER_DEFAULT_AP_CHANNEL 1
 
+#define WIFI_HANDLER_DEFAULT_AP_SSID   "ESP_ALEX"
+#define WIFI_HANDLER_DEFAULT_AP_PASS   "nhut12345"
+#define WIFI_HANDLER_DEFAULT_STA_SSID  "Thoai Hanh"
+#define WIFI_HANDLER_DEFAULT_STA_PASS  "hanh12345"
+
 // need 8kb for large data struct
 #define WIFI_HANDLER_DRIVER_TASK_STACK 8192
 #define WIFI_HANDLER_DRIVER_TASK_PRIO  5
@@ -51,8 +56,6 @@ typedef struct wifi_handler {
 /* singleton pattern */
 static wifi_handler_t* s_handler = NULL;
 
-/* Event handler: arg -> wifi_handler_t* (the singleton), event_data -> payload.
-   Wired for both WIFI_EVENT and IP_EVENT so state stays in sync. */
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                                int32_t event_id, void* event_data) {
     wifi_handler_t* handler = (wifi_handler_t*)arg;
@@ -63,6 +66,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
         case WIFI_EVENT_STA_START:
+            handler->state = WIFI_FSM_STATE_RUNNING;
             ESP_LOGI(TAG, "STA interface started");
             break;
         case WIFI_EVENT_AP_START:
@@ -182,8 +186,18 @@ static void wifi_start_with_mode(void* arg) {
         s_handler->state = WIFI_FSM_STATE_POWER_OFF;
     }
 
-    /* Get credentials from the manager (single source of truth) */
     wifi_credentials_t creds = wifi_manager_get_credentials(mgr);
+
+    if (creds.ssid[0] == '\0') {
+        if (mode == WIFI_MODE_AP) {
+            snprintf((char*)creds.ssid, sizeof(creds.ssid), "%s", WIFI_HANDLER_DEFAULT_AP_SSID);
+            snprintf((char*)creds.pass, sizeof(creds.pass), "%s", WIFI_HANDLER_DEFAULT_AP_PASS);
+        } else {
+            snprintf((char*)creds.ssid, sizeof(creds.ssid), "%s", WIFI_HANDLER_DEFAULT_STA_SSID);
+            snprintf((char*)creds.pass, sizeof(creds.pass), "%s", WIFI_HANDLER_DEFAULT_STA_PASS);
+        }
+        ESP_LOGI(TAG, "no configured creds, using default ssid=%s", creds.ssid);
+    }
 
     if (mode == WIFI_MODE_AP) 
     {
@@ -372,8 +386,19 @@ esp_err_t wifi_handler_process_event(wifi_srv_event_t event, void* data) {
     switch (event) {
 
     case WIFI_SRV_AP_EVENT_START:
-    case WIFI_SRV_STA_EVENT_START:
+    case WIFI_SRV_STA_EVENT_START: {
+        if (data != NULL) {
+            wifi_credentials_t* start_creds = (wifi_credentials_t*)data;
+            if (s_handler != NULL && s_handler->mgr != NULL) {
+                wifi_manager_set_credentials(s_handler->mgr,
+                                             start_creds->ssid,
+                                             start_creds->pass);
+                ESP_LOGI(TAG, "seeded start creds (ssid=%s)", start_creds->ssid);
+            }
+            free(data);
+        }
         return wifi_handler_start_driver();
+    }
 
     case WIFI_SRV_EVENT_STOP:
         if (s_handler->state == WIFI_FSM_STATE_POWER_OFF) {

@@ -45,57 +45,13 @@ typedef struct {
     void* data;
 } wifi_srv_msg_t;
 
-/**
- * @brief Initialize wifi service (create unified queue + handler).
- * @return ESP_OK on success, error code otherwise.
- */
 esp_err_t wifi_srv_init(wifi_manager_t* mgr);
-
-/**
- * @brief Start the dispatcher wifi_service_task.
- *
- * The task blocks on xQueueReceive(portMAX_DELAY) and only forwards
- * events to wifi_handler_process_event().
- *
- * @return ESP_OK on success, error code otherwise.
- */
 esp_err_t wifi_srv_start(void);
-
-/**
- * @brief Post a command/event from any context (app task, timer callback).
- *
- * Non-blocking. LIghtway method to public message (only applied on queue of
- * this package)
- * 
- * @param data  Optional payload; credentials for WIFI_SRV_EVENT_CONNECT.
- * @return ESP_OK on success, ESP_ERR_NO_MEM if queue is full.
- */
 esp_err_t wifi_srv_post_event(wifi_srv_event_t event, void* data);
-
-/**
- * @brief Switch the wifi driver to the given mode (AP or STA).
- *
- * Argument-driven: the caller passes the target mode. If the driver is
- * currently running it is stopped first, then the manager mode is updated
- * and the matching START event is posted. Non-blocking.
- *
- * @param mode  Target mode: WIFI_MODE_AP or WIFI_MODE_STA.
- * @return ESP_OK on success, error code otherwise.
- */
+esp_err_t wifi_srv_set_credentials(const char* ssid, const char* pass);
 esp_err_t wifi_srv_switch_mode(wifi_mode_t mode);
-
-/**
- * @brief Stop the dispatcher task.
- *
- * @return ESP_OK on success, error code otherwise.
- */
+esp_err_t wifi_srv_switch_mode_with_creds(wifi_mode_t mode, wifi_credentials_t* creds);
 esp_err_t wifi_srv_stop(void);
-
-/**
- * @brief Deinitialize wifi service and free the unified queue.
- *
- * @return ESP_OK on success, error code otherwise.
- */
 esp_err_t wifi_srv_deinit(void);
 
 #ifdef __cplusplus

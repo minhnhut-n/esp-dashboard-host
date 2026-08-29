@@ -13,7 +13,8 @@ SET (INCLUDE_DIR ${CMAKE_SOURCE_DIR}/src
                  ${CMAKE_SOURCE_DIR}/lib/http/
                  ${CMAKE_SOURCE_DIR}/lib/event_bus/
                  ${CMAKE_SOURCE_DIR}/lib/wifi/
-                 ${CMAKE_SOURCE_DIR}/lib/storage_manager/)
+                 ${CMAKE_SOURCE_DIR}/lib/storage_manager/
+                 ${CMAKE_SOURCE_DIR}/lib/helper/)
 
 idf_component_register(
     SRCS ${SOURCE}
