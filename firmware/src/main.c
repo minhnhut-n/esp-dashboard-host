@@ -125,31 +125,15 @@ void app_main(void) {
         return;
     }
 
-    /* Seed the single manager with AP credentials, then start AP. */
-    wifi_manager_set_credentials(mgr,
-                                 (uint8_t*)WIFI_HANDLER_DEFAULT_AP_SSID,
-                                 (uint8_t*)WIFI_HANDLER_DEFAULT_AP_PASS);
-    err = wifi_srv_switch_mode(WIFI_MODE_AP);
+   err = wifi_srv_switch_mode(WIFI_MODE_AP);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "switch to AP failed: %s", esp_err_to_name(err));
     }
 
-    // // for demo
-    // vTaskDelay(pdMS_TO_TICKS(1000));
-
-    // wifi_manager_set_credentials(mgr,
-    //                              (uint8_t*)WIFI_HANDLER_DEFAULT_STA_SSID,
-    //                              (uint8_t*)WIFI_HANDLER_DEFAULT_STA_PASS);
-    // err = wifi_srv_switch_mode(WIFI_MODE_STA);
-    // if (err != ESP_OK) {
-    //     ESP_LOGE(TAG, "switch to STA failed: %s", esp_err_to_name(err));
-    // }
-
-
-    // err = wifi_srv_post_event(CREDENTIAL_LOAD_EVENT, NULL);
-    // if (err != ESP_OK) {
-    //     ESP_LOGW(TAG, "post CREDENTIAL_LOAD_EVENT failed: %s", esp_err_to_name(err));
-    // }
+    err = wifi_srv_post_event(CREDENTIAL_LOAD_EVENT, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "post CREDENTIAL_LOAD_EVENT failed: %s", esp_err_to_name(err));
+    }
 
     /* Logic check null or start with option (default is restore, optional: start default)
        -- Not implement yet */

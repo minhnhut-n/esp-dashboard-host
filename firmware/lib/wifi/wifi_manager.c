@@ -8,7 +8,7 @@
 static const char* wifi_log_tag = "WIFI_TAG";
 
 struct wifi_manager {
-    wifi_credentials_t creds;
+    wifi_credentials_t creds;   // for STA mode only
     wifi_mode_t mode;
     wifi_config_t config;
     SemaphoreHandle_t mutex;
@@ -18,10 +18,6 @@ static esp_err_t wifi_manager_creads_update(wifi_manager_t* mgr) {
     if (mgr == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-
-    memcpy(mgr->config.ap.ssid, mgr->creds.ssid, MAX_SSID_LEN);
-    memcpy(mgr->config.ap.password, mgr->creds.pass, MAX_PASS_LEN);
-
     memcpy(mgr->config.sta.ssid, mgr->creds.ssid, MAX_SSID_LEN);
     memcpy(mgr->config.sta.password, mgr->creds.pass, MAX_PASS_LEN);
 
@@ -86,7 +82,10 @@ esp_err_t wifi_manager_set_credentials(wifi_manager_t* mgr, uint8_t* ssid, uint8
     if (mgr == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    
+    if (ssid == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
     if (xSemaphoreTake(mgr->mutex, portMAX_DELAY) == pdTRUE) {
         memcpy(mgr->creds.ssid, ssid, MAX_SSID_LEN);
         memcpy(mgr->creds.pass, pass, MAX_PASS_LEN);
@@ -96,9 +95,10 @@ esp_err_t wifi_manager_set_credentials(wifi_manager_t* mgr, uint8_t* ssid, uint8
 
     return ret;
 }
-wifi_credentials_t wifi_manager_get_credentials(wifi_manager_t* mgr) {
 
+wifi_credentials_t wifi_manager_get_credentials(wifi_manager_t* mgr) {
     wifi_credentials_t cred;
+    memset(&cred, 0, sizeof(cred));
     if (mgr == NULL) {
         ESP_LOGI(wifi_log_tag, "Invalid argument for getting credential !!");
         return cred;

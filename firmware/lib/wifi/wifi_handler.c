@@ -186,17 +186,27 @@ static void wifi_start_with_mode(void* arg) {
         s_handler->state = WIFI_FSM_STATE_POWER_OFF;
     }
 
-    wifi_credentials_t creds = wifi_manager_get_credentials(mgr);
+    wifi_credentials_t creds;
+    memset(&creds, 0, sizeof(creds));
 
-    if (creds.ssid[0] == '\0') {
-        if (mode == WIFI_MODE_AP) {
-            snprintf((char*)creds.ssid, sizeof(creds.ssid), "%s", WIFI_HANDLER_DEFAULT_AP_SSID);
-            snprintf((char*)creds.pass, sizeof(creds.pass), "%s", WIFI_HANDLER_DEFAULT_AP_PASS);
+    if (mode == WIFI_MODE_AP) {
+        snprintf((char*)creds.ssid, sizeof(creds.ssid), "%s",
+                 WIFI_HANDLER_DEFAULT_AP_SSID);
+        snprintf((char*)creds.pass, sizeof(creds.pass), "%s",
+                 WIFI_HANDLER_DEFAULT_AP_PASS);
+        ESP_LOGI(TAG, "AP creds are fixed defaults (ssid=%s)", creds.ssid);
+    } else {
+        creds = wifi_manager_get_credentials(mgr);  // STA creds
+        if (creds.ssid[0] == '\0') {
+            snprintf((char*)creds.ssid, sizeof(creds.ssid), "%s",
+                     WIFI_HANDLER_DEFAULT_STA_SSID);
+            snprintf((char*)creds.pass, sizeof(creds.pass), "%s",
+                     WIFI_HANDLER_DEFAULT_STA_PASS);
+            ESP_LOGI(TAG, "no configured STA creds, using default ssid=%s",
+                     creds.ssid);
         } else {
-            snprintf((char*)creds.ssid, sizeof(creds.ssid), "%s", WIFI_HANDLER_DEFAULT_STA_SSID);
-            snprintf((char*)creds.pass, sizeof(creds.pass), "%s", WIFI_HANDLER_DEFAULT_STA_PASS);
+            ESP_LOGI(TAG, "STA creds loaded (ssid=%s), (pass=%s)", creds.ssid, creds.pass);
         }
-        ESP_LOGI(TAG, "no configured creds, using default ssid=%s", creds.ssid);
     }
 
     if (mode == WIFI_MODE_AP) 
@@ -390,10 +400,12 @@ esp_err_t wifi_handler_process_event(wifi_srv_event_t event, void* data) {
         if (data != NULL) {
             wifi_credentials_t* start_creds = (wifi_credentials_t*)data;
             if (s_handler != NULL && s_handler->mgr != NULL) {
-                wifi_manager_set_credentials(s_handler->mgr,
-                                             start_creds->ssid,
-                                             start_creds->pass);
-                ESP_LOGI(TAG, "seeded start creds (ssid=%s)", start_creds->ssid);
+                if (event == WIFI_SRV_STA_EVENT_START) {
+                    wifi_manager_set_credentials(s_handler->mgr, start_creds->ssid, start_creds->pass);
+                    ESP_LOGI(TAG, "seeded STA start creds (ssid=%s), (pass=%s)", start_creds->ssid, start_creds->pass);
+                } else {
+                    ESP_LOGI(TAG, "AP_START ignores creds (AP uses fixed defaults)");
+                }
             }
             free(data);
         }

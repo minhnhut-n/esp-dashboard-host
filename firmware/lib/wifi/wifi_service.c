@@ -31,7 +31,7 @@ static const char* TAG = "wifi_srv";
  * - a bool variable for fast-tracking state of this module.
 */
 typedef struct {
-    QueueHandle_t unified_queue;
+    QueueHandle_t  unified_queue;
     TaskHandle_t   task_handle;
     bool           started;
     wifi_manager_t* mgr;
@@ -93,20 +93,27 @@ static void wifi_srv_mode_change_handler(esp_event_base_t base, int32_t id, void
         return;
     }
     
-    if (ssid[0] != '\0' && pass[0] != '\0') {
-        esp_err_t creds_err = wifi_srv_set_credentials(ssid, pass);
-        if (creds_err != ESP_OK) {
-            ESP_LOGW(TAG, "failed to set credentials: %s", esp_err_to_name(creds_err));
-        }
+    if (mode == WIFI_MODE_STA) {
+        if (ssid[0] != '\0' && pass[0] != '\0') {
+            esp_err_t creds_err = wifi_manager_set_credentials(wifi_srv_ctx.mgr,
+                                                               (uint8_t*)ssid,
+                                                               (uint8_t*)pass);
+            if (creds_err != ESP_OK) {
+                ESP_LOGW(TAG, "failed to set credentials: %s", esp_err_to_name(creds_err));
+            }
 
-        wifi_credentials_t creds;
-        memset(&creds, 0, sizeof(creds));
-        snprintf((char*)creds.ssid, sizeof(creds.ssid), "%s", ssid);
-        snprintf((char*)creds.pass, sizeof(creds.pass), "%s", pass);
-        esp_err_t store_err = wifi_srv_post_event(CREDENTIAL_STORE_EVENT, &creds);
-        if (store_err != ESP_OK) {
-            ESP_LOGW(TAG, "persist creds failed: %s", esp_err_to_name(store_err));
+            wifi_credentials_t creds;
+            memset(&creds, 0, sizeof(creds));
+            snprintf((char*)creds.ssid, sizeof(creds.ssid), "%s", ssid);
+            snprintf((char*)creds.pass, sizeof(creds.pass), "%s", pass);
+            esp_err_t store_err = wifi_srv_post_event(CREDENTIAL_STORE_EVENT, &creds);
+            if (store_err != ESP_OK) {
+                ESP_LOGW(TAG, "persist creds failed: %s", esp_err_to_name(store_err));
+            }
         }
+    }
+    else {
+        ESP_LOGI(TAG, "AP switch request: fixed AP defaults, request creds ignored");
     }
 
     ESP_LOGI(TAG, "switching wifi mode to %d", (int)mode);
@@ -265,11 +272,16 @@ esp_err_t wifi_srv_switch_mode_with_creds(wifi_mode_t mode, wifi_credentials_t* 
     }
 
     if (creds != NULL) {
-        ESP_LOGI(TAG, "switch mode %d with creds ssid=%s", (int)mode, creds->ssid);
-        esp_err_t mgr_err = wifi_manager_set_credentials(wifi_srv_ctx.mgr, creds->ssid, creds->pass);
-        if (mgr_err != ESP_OK) {
-            ESP_LOGE(TAG, "set credentials failed: %s", esp_err_to_name(mgr_err));
-            return mgr_err;
+        if (mode != WIFI_MODE_STA) {
+            ESP_LOGI(TAG, "AP start: fixed AP defaults, request creds ignored");
+        } else {
+            ESP_LOGI(TAG, "switch to STA with creds ssid=%s", creds->ssid);
+            esp_err_t mgr_err = wifi_manager_set_credentials(wifi_srv_ctx.mgr,
+                                                             creds->ssid, creds->pass);
+            if (mgr_err != ESP_OK) {
+                ESP_LOGE(TAG, "set credentials failed: %s", esp_err_to_name(mgr_err));
+                return mgr_err;
+            }
         }
     }
 
