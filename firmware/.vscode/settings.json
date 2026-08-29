@@ -1,0 +1,9 @@
+{
+    "C_Cpp.default.configurationProvider": "platformio.platformio-ide",
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/.pio/build/esp32doit-devkit-v1/compile_commands.json",
+    "C_Cpp.errorSquiggles": "enabled",
+    "files.associations": {
+        "*.h": "c"
+    }
+}
